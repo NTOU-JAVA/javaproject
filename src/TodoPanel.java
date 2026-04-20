@@ -262,27 +262,17 @@ public class TodoPanel extends JPanel {
         dateRow.add(eDay);
 
         JPanel timeRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 2, 0));
-        timeRow.setAlignmentX(Component.LEFT_ALIGNMENT);
         eHour.setPreferredSize(new Dimension(80, 22));
         eMinute.setPreferredSize(new Dimension(80, 22));
         timeRow.add(eHour); timeRow.add(new JLabel(":"));
         timeRow.add(eMinute);
 
-        JLabel editDateLabel = new JLabel("日期：");
-        editDateLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
-        JLabel editTimeLabel = new JLabel("時間：");
-        editTimeLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
-
         JPanel editReminderPanel = new JPanel();
         editReminderPanel.setLayout(new BoxLayout(editReminderPanel, BoxLayout.Y_AXIS));
-        editReminderPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
-        editReminderPanel.add(editDateLabel);
         editReminderPanel.add(dateRow);
         editReminderPanel.add(Box.createRigidArea(new Dimension(0, 8)));
-        editReminderPanel.add(editTimeLabel);
         editReminderPanel.add(timeRow);
         editReminderPanel.setVisible(editReminderCheck.isSelected());
-        editReminderCheck.setAlignmentX(Component.LEFT_ALIGNMENT);
         editReminderCheck.addActionListener(e -> editReminderPanel.setVisible(editReminderCheck.isSelected()));
 
         JPanel panel = new JPanel();
