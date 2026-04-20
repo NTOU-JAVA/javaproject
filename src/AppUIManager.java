@@ -31,7 +31,7 @@ public class AppUIManager {
     private void initializeUI(Runnable saveTasksCallback, Runnable saveTodosCallback) {
         frame.setTitle("學生行程與任務管理系統");
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        frame.setSize(900, 600);
+        frame.setSize(1000, 600);
         frame.setLocationRelativeTo(null);
 
         JPanel contentPane = new JPanel(new BorderLayout(12, 12));

@@ -117,6 +117,7 @@ public class TodoPanel extends JPanel {
         // 提醒時間選擇（預設隱藏）
         reminderPanel = new JPanel();
         reminderPanel.setLayout(new BoxLayout(reminderPanel, BoxLayout.Y_AXIS));
+        reminderPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
         reminderPanel.setVisible(false);
 
         // 提醒時間勾選
@@ -126,26 +127,33 @@ public class TodoPanel extends JPanel {
         });
         formPanel.add(reminderCheckBox);
 
+        JLabel dateLabel = new JLabel("日期：");
+        dateLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
         JPanel dateRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 2, 0));
+        dateRow.setAlignmentX(Component.LEFT_ALIGNMENT);
         yearSpinner.setPreferredSize(new Dimension(65, 25));
         monthSpinner.setPreferredSize(new Dimension(45, 25));
         daySpinner.setPreferredSize(new Dimension(45, 25));
-        dateRow.add(new JLabel("日期："));
         dateRow.add(yearSpinner);
         dateRow.add(new JLabel("/"));
         dateRow.add(monthSpinner);
         dateRow.add(new JLabel("/"));
         dateRow.add(daySpinner);
 
+        JLabel timeLabel = new JLabel("時間：");
+        timeLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
         JPanel timeRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 2, 0));
+        timeRow.setAlignmentX(Component.LEFT_ALIGNMENT);
         hourSpinner.setPreferredSize(new Dimension(45, 25));
         minuteSpinner.setPreferredSize(new Dimension(45, 25));
-        timeRow.add(new JLabel("時間："));
         timeRow.add(hourSpinner);
         timeRow.add(new JLabel(":"));
         timeRow.add(minuteSpinner);
 
+        reminderPanel.add(dateLabel);
         reminderPanel.add(dateRow);
+        reminderPanel.add(Box.createRigidArea(new Dimension(0, 8)));
+        reminderPanel.add(timeLabel);
         reminderPanel.add(timeRow);
         formPanel.add(reminderPanel);
         formPanel.add(Box.createRigidArea(new Dimension(0, 8)));
@@ -224,6 +232,7 @@ public class TodoPanel extends JPanel {
 
         // 提醒時間
         JCheckBox editReminderCheck = new JCheckBox("設定提醒時間");
+        editReminderCheck.setPreferredSize(new Dimension(250, 60));
         LocalDateTime reminderDT = null;
         if (todo.getReminderTime() != null) {
             try {
@@ -245,24 +254,35 @@ public class TodoPanel extends JPanel {
         eMinute.setEditor(new JSpinner.NumberEditor(eMinute, "00"));
 
         JPanel dateRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 2, 0));
-        eYear.setPreferredSize(new Dimension(65, 25));
-        eMonth.setPreferredSize(new Dimension(45, 25));
-        eDay.setPreferredSize(new Dimension(45, 25));
+        eYear.setPreferredSize(new Dimension(80, 22));
+        eMonth.setPreferredSize(new Dimension(80, 22));
+        eDay.setPreferredSize(new Dimension(80, 22));
         dateRow.add(eYear); dateRow.add(new JLabel("/")); 
         dateRow.add(eMonth); dateRow.add(new JLabel("/"));
         dateRow.add(eDay);
 
         JPanel timeRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 2, 0));
-        eHour.setPreferredSize(new Dimension(45, 25));
-        eMinute.setPreferredSize(new Dimension(45, 25));
+        timeRow.setAlignmentX(Component.LEFT_ALIGNMENT);
+        eHour.setPreferredSize(new Dimension(80, 22));
+        eMinute.setPreferredSize(new Dimension(80, 22));
         timeRow.add(eHour); timeRow.add(new JLabel(":"));
         timeRow.add(eMinute);
 
+        JLabel editDateLabel = new JLabel("日期：");
+        editDateLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+        JLabel editTimeLabel = new JLabel("時間：");
+        editTimeLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+
         JPanel editReminderPanel = new JPanel();
         editReminderPanel.setLayout(new BoxLayout(editReminderPanel, BoxLayout.Y_AXIS));
+        editReminderPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
+        editReminderPanel.add(editDateLabel);
         editReminderPanel.add(dateRow);
+        editReminderPanel.add(Box.createRigidArea(new Dimension(0, 8)));
+        editReminderPanel.add(editTimeLabel);
         editReminderPanel.add(timeRow);
         editReminderPanel.setVisible(editReminderCheck.isSelected());
+        editReminderCheck.setAlignmentX(Component.LEFT_ALIGNMENT);
         editReminderCheck.addActionListener(e -> editReminderPanel.setVisible(editReminderCheck.isSelected()));
 
         JPanel panel = new JPanel();
@@ -314,6 +334,14 @@ public class TodoPanel extends JPanel {
     }
 
     public void updateTable() {
+        todos.sort((a, b) -> {
+            String ta = a.getReminderTime();
+            String tb = b.getReminderTime();
+            if (ta == null && tb == null) return 0;
+            if (ta == null) return 1;
+            if (tb == null) return -1;
+            return ta.compareTo(tb);
+        });
         tableModel.setRowCount(0);
         for (TodoItem todo : todos) {
             tableModel.addRow(new Object[]{

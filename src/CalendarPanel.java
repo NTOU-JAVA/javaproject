@@ -1,9 +1,11 @@
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import java.awt.*;
+import java.awt.event.*;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -27,6 +29,9 @@ public class CalendarPanel extends JPanel {
     private final JSpinner hourSpinner;
     private final JSpinner minuteSpinner;
     private final JTextField contentField = new JTextField();
+    private final List<JList<Task>> dayTaskLists = new ArrayList<>();
+    private Task selectedTask = null;
+    private int selectedDayIndex = -1;
 
     public CalendarPanel(List<Task> tasks) {
         this.tasks = tasks;
@@ -84,13 +89,44 @@ public class CalendarPanel extends JPanel {
             dayLabels[i].setBorder(BorderFactory.createEmptyBorder(4, 0, 4, 0));
             dayPanel.add(dayLabels[i], BorderLayout.NORTH);
 
-            JTextArea taskArea = new JTextArea();
-            taskArea.setEditable(false);
-            taskArea.setOpaque(false);
-            taskArea.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 11));
-            taskArea.setLineWrap(true);
-            taskArea.setWrapStyleWord(true);
-            JScrollPane scroll = new JScrollPane(taskArea);
+            JList<Task> taskList = new JList<>(new DefaultListModel<>());
+            taskList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+            taskList.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 11));
+            taskList.setOpaque(true);
+            taskList.setBackground(new Color(250, 250, 250));
+            taskList.setCellRenderer(new DefaultListCellRenderer() {
+                @Override
+                public Component getListCellRendererComponent(JList<?> list, Object value, int index,
+                                                              boolean isSelected, boolean cellHasFocus) {
+                    JLabel label = (JLabel) super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
+                    if (value instanceof Task) {
+                        Task task = (Task) value;
+                        label.setText("• " + task.getTime() + " " + task.getContent());
+                        label.setBorder(BorderFactory.createEmptyBorder(2, 4, 2, 4));
+                    }
+                    return label;
+                }
+            });
+            final int dayIndex = i;
+            taskList.addListSelectionListener(e -> {
+                if (!e.getValueIsAdjusting()) {
+                    Task selected = taskList.getSelectedValue();
+                    if (selected != null) {
+                        selectedTask = selected;
+                        selectedDayIndex = dayIndex;
+                        for (int j = 0; j < dayTaskLists.size(); j++) {
+                            if (j != dayIndex) {
+                                dayTaskLists.get(j).clearSelection();
+                            }
+                        }
+                    } else if (selectedDayIndex == dayIndex) {
+                        selectedTask = null;
+                        selectedDayIndex = -1;
+                    }
+                }
+            });
+            dayTaskLists.add(taskList);
+            JScrollPane scroll = new JScrollPane(taskList);
             scroll.setBorder(BorderFactory.createEmptyBorder());
             dayPanel.add(scroll, BorderLayout.CENTER);
 
@@ -103,10 +139,20 @@ public class CalendarPanel extends JPanel {
         JPanel formPanel = new JPanel();
         formPanel.setLayout(new BoxLayout(formPanel, BoxLayout.Y_AXIS));
         formPanel.setBorder(BorderFactory.createTitledBorder("新增任務"));
-        formPanel.setPreferredSize(new Dimension(200, 0));
+        formPanel.setPreferredSize(new Dimension(220, 0));
+
+        // 任務內容
+        JLabel contentLabel = new JLabel("任務內容：");
+        contentLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+        formPanel.add(contentLabel);
+        formPanel.add(contentField);
+        formPanel.add(Box.createRigidArea(new Dimension(0, 8)));
 
         // 日期選擇
+        JLabel dateLabel = new JLabel("日期：");
+        dateLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
         JPanel datePanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 2, 0));
+        datePanel.setAlignmentX(Component.LEFT_ALIGNMENT);
         yearSpinner.setPreferredSize(new Dimension(65, 25));
         monthSpinner.setPreferredSize(new Dimension(45, 25));
         daySpinner.setPreferredSize(new Dimension(45, 25));
@@ -115,49 +161,41 @@ public class CalendarPanel extends JPanel {
         datePanel.add(monthSpinner);
         datePanel.add(new JLabel("/"));
         datePanel.add(daySpinner);
+        formPanel.add(dateLabel);
+        formPanel.add(datePanel);
+        formPanel.add(Box.createRigidArea(new Dimension(0, 8)));
 
         // 時間選擇
+        JLabel timeLabel = new JLabel("時間：");
+        timeLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
         JPanel timePanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 2, 0));
+        timePanel.setAlignmentX(Component.LEFT_ALIGNMENT);
         hourSpinner.setPreferredSize(new Dimension(45, 25));
         minuteSpinner.setPreferredSize(new Dimension(45, 25));
         timePanel.add(hourSpinner);
         timePanel.add(new JLabel(":"));
         timePanel.add(minuteSpinner);
-
-        JPanel fieldPanel = new JPanel(new GridLayout(6, 1, 4, 4));
-        fieldPanel.add(new JLabel("任務內容："));
-        fieldPanel.add(contentField);
-        fieldPanel.add(new JLabel("日期："));
-        fieldPanel.add(datePanel);
-        fieldPanel.add(new JLabel("時間："));
-        fieldPanel.add(timePanel);
-        formPanel.add(fieldPanel);
+        formPanel.add(timeLabel);
+        formPanel.add(timePanel);
+        formPanel.add(Box.createRigidArea(new Dimension(0, 8)));
 
         JButton addButton = new JButton("新增任務");
         addButton.setAlignmentX(Component.LEFT_ALIGNMENT);
         addButton.addActionListener(e -> addTask());
-        formPanel.add(Box.createRigidArea(new Dimension(0, 8)));
         formPanel.add(addButton);
+        formPanel.add(Box.createRigidArea(new Dimension(0, 4)));
+
+        // 編輯按鈕
+        JButton editButton = new JButton("編輯");
+        editButton.setAlignmentX(Component.LEFT_ALIGNMENT);
+        editButton.addActionListener(e -> editSelectedTask());
+        formPanel.add(editButton);
+        formPanel.add(Box.createRigidArea(new Dimension(0, 4)));
 
         // 刪除按鈕
-        JButton deleteButton = new JButton("刪除選取任務");
+        JButton deleteButton = new JButton("刪除");
         deleteButton.setAlignmentX(Component.LEFT_ALIGNMENT);
-        deleteButton.addActionListener(e -> {
-            // 找到目前週內被點選的任務（簡易實作：刪除內容相符的第一筆）
-            String content = contentField.getText().trim();
-            if (content.isEmpty()) {
-                JOptionPane.showMessageDialog(this, "請在內容欄輸入要刪除的任務名稱。", "提示", JOptionPane.INFORMATION_MESSAGE);
-                return;
-            }
-            boolean removed = tasks.removeIf(t -> t.getContent().equals(content));
-            if (removed) {
-                contentField.setText("");
-                updateCalendar();
-            } else {
-                JOptionPane.showMessageDialog(this, "找不到該任務。", "提示", JOptionPane.WARNING_MESSAGE);
-            }
-        });
-        formPanel.add(Box.createRigidArea(new Dimension(0, 4)));
+        deleteButton.addActionListener(e -> deleteSelectedTask());
         formPanel.add(deleteButton);
 
         add(formPanel, BorderLayout.EAST);
@@ -188,10 +226,92 @@ public class CalendarPanel extends JPanel {
 
         String date = String.format("%04d-%02d-%02d", year, month, day);
         String time = String.format("%02d:%02d", hour, minute);
-        int nextId = tasks.isEmpty() ? 1 : tasks.stream().mapToInt(Task::getId).max().orElse(0) + 1;
 
+        int nextId = tasks.isEmpty() ? 1 : tasks.stream().mapToInt(Task::getId).max().orElse(0) + 1;
         tasks.add(new Task(nextId, date, time, content));
+
         contentField.setText("");
+        updateCalendar();
+    }
+
+    private void editSelectedTask() {
+        if (selectedTask == null) {
+            JOptionPane.showMessageDialog(this, "請先點選要編輯的任務。", "提示", JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+
+        // 編輯內容
+        JTextField editContent = new JTextField(selectedTask.getContent());
+
+        // 日期
+        LocalDate reminderDT = LocalDate.parse(selectedTask.getDate());
+        JSpinner eYear = new JSpinner(new SpinnerNumberModel(reminderDT.getYear(), 2020, 2099, 1));
+        JSpinner eMonth = new JSpinner(new SpinnerNumberModel(reminderDT.getMonthValue(), 1, 12, 1));
+        JSpinner eDay = new JSpinner(new SpinnerNumberModel(reminderDT.getDayOfMonth(), 1, 31, 1));
+        JSpinner eHour = new JSpinner(new SpinnerNumberModel(Integer.parseInt(selectedTask.getTime().split(":")[0]), 0, 23, 1));
+        JSpinner eMinute = new JSpinner(new SpinnerNumberModel(Integer.parseInt(selectedTask.getTime().split(":")[1]), 0, 59, 1));
+
+        eMonth.setEditor(new JSpinner.NumberEditor(eMonth, "00"));
+        eDay.setEditor(new JSpinner.NumberEditor(eDay, "00"));
+        eHour.setEditor(new JSpinner.NumberEditor(eHour, "00"));
+        eMinute.setEditor(new JSpinner.NumberEditor(eMinute, "00"));
+
+        JPanel dateRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 2, 0));
+        eYear.setPreferredSize(new Dimension(80, 30));
+        eMonth.setPreferredSize(new Dimension(80, 30));
+        eDay.setPreferredSize(new Dimension(80, 30));
+        dateRow.add(eYear); dateRow.add(new JLabel("/"));
+        dateRow.add(eMonth); dateRow.add(new JLabel("/"));
+        dateRow.add(eDay);
+
+        JPanel timeRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 2, 0));
+        eHour.setPreferredSize(new Dimension(80, 30));
+        eMinute.setPreferredSize(new Dimension(80, 30));
+        timeRow.add(eHour); timeRow.add(new JLabel(":"));
+        timeRow.add(eMinute);
+
+        JPanel editPanel = new JPanel();
+        editPanel.setLayout(new BoxLayout(editPanel, BoxLayout.Y_AXIS));
+        editPanel.add(new JLabel("編輯內容："));
+        editPanel.add(editContent);
+        editPanel.add(Box.createRigidArea(new Dimension(0, 8)));
+        editPanel.add(dateRow);
+        editPanel.add(Box.createRigidArea(new Dimension(0, 8)));
+        editPanel.add(timeRow);
+
+        int result = JOptionPane.showConfirmDialog(this, editPanel, "編輯任務", JOptionPane.OK_CANCEL_OPTION);
+        if (result == JOptionPane.OK_OPTION) {
+            String newContent = editContent.getText().trim();
+            if (newContent.isEmpty()) {
+                JOptionPane.showMessageDialog(this, "內容不可為空。", "編輯錯誤", JOptionPane.WARNING_MESSAGE);
+                return;
+            }
+            int y = (int) eYear.getValue();
+            int mo = (int) eMonth.getValue();
+            int d = (int) eDay.getValue();
+            int h = (int) eHour.getValue();
+            int mi = (int) eMinute.getValue();
+            try {
+                LocalDate.of(y, mo, d);
+            } catch (Exception e) {
+                JOptionPane.showMessageDialog(this, "日期不合法。", "日期錯誤", JOptionPane.WARNING_MESSAGE);
+                return;
+            }
+            selectedTask.setContent(newContent);
+            selectedTask.setDate(String.format("%04d-%02d-%02d", y, mo, d));
+            selectedTask.setTime(String.format("%02d:%02d", h, mi));
+            selectedTask = null;
+            updateCalendar();
+        }
+    }
+
+    private void deleteSelectedTask() {
+        if (selectedTask == null) {
+            JOptionPane.showMessageDialog(this, "請先點選要刪除的任務。", "提示", JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+        tasks.remove(selectedTask);
+        selectedTask = null;
         updateCalendar();
     }
 
@@ -214,16 +334,18 @@ public class CalendarPanel extends JPanel {
                     ? new Color(220, 235, 255)
                     : new Color(250, 250, 250));
 
-            JTextArea taskArea = (JTextArea) ((JScrollPane) dayPanels[i].getComponent(1))
-                    .getViewport().getView();
-            StringBuilder sb = new StringBuilder();
-            for (Task task : tasks) {
-                if (dateStr.equals(task.getDate())) {
-                    sb.append("• ").append(task.getTime())
-                      .append(" ").append(task.getContent()).append("\n");
-                }
+            JList<Task> taskList = dayTaskLists.get(i);
+            DefaultListModel<Task> model = (DefaultListModel<Task>) taskList.getModel();
+            model.clear();
+            tasks.stream()
+                    .filter(task -> dateStr.equals(task.getDate()))
+                    .sorted((a, b) -> a.getTime().compareTo(b.getTime()))
+                    .forEach(model::addElement);
+            if (selectedTask != null && selectedTask.getDate().equals(dateStr)) {
+                taskList.setSelectedValue(selectedTask, true);
+            } else {
+                taskList.clearSelection();
             }
-            taskArea.setText(sb.length() > 0 ? sb.toString() : "（無任務）");
         }
     }
 }
