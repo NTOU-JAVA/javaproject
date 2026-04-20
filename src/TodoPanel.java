@@ -1,76 +1,163 @@
 import javax.swing.*;
-import javax.swing.border.EmptyBorder;
 import javax.swing.table.DefaultTableModel;
+import javax.swing.border.EmptyBorder;
 import java.awt.*;
-import java.time.*;
+import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.List;
 
 /**
- * TodoPanel 負責代辦的建立、編輯、刪除與列表顯示。
+ * TodoPanel 負責代辦事項的建立、編輯、刪除、勾選完成與提醒。
  */
 public class TodoPanel extends JPanel {
-    private final DefaultTableModel tableModel = new DefaultTableModel(new Object[]{"ID", "日期", "時間", "內容"}, 0);
+    private static final DateTimeFormatter REMINDER_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
+
+    private final DefaultTableModel tableModel = new DefaultTableModel(
+            new Object[]{"完成", "內容", "提醒時間"}, 0) {
+        @Override
+        public Class<?> getColumnClass(int col) {
+            return col == 0 ? Boolean.class : String.class;
+        }
+        @Override
+        public boolean isCellEditable(int row, int col) {
+            return col == 0;
+        }
+    };
+
+    private final JTable todoTable;
     private final JTextField contentField = new JTextField();
-    private final JTextField dateField = new JTextField(LocalDate.now().toString());
-    private final JTextField timeField = new JTextField("09:00");
+
+    // 提醒時間相關元件
+    private final JCheckBox reminderCheckBox = new JCheckBox("設定提醒時間");
+    private final JSpinner yearSpinner;
+    private final JSpinner monthSpinner;
+    private final JSpinner daySpinner;
+    private final JSpinner hourSpinner;
+    private final JSpinner minuteSpinner;
+    private final JPanel reminderPanel;
+
     private final JButton editButton = new JButton("編輯");
     private final JButton deleteButton = new JButton("刪除");
-    private final JTable todoTable;
     private final List<TodoItem> todos;
-    private final Timer reminderTimer;
-    private final java.util.Set<Integer> remindedTodoIds = new java.util.HashSet<>();
     private final Runnable updateCallback;
-    private final Runnable switchToCalendarCallback;
+    private final Timer reminderTimer;
+    private final java.util.Set<Integer> remindedIds = new java.util.HashSet<>();
 
-    /**
-     * 建構代辦面板，並建立表格與操作表單元件。
-     *
-     * @param todos 代辦項目列表
-     * @param updateCallback 更新 UI 的回呼
-     */
     public TodoPanel(List<TodoItem> todos, Runnable updateCallback) {
-        this(todos, updateCallback, null);
-    }
-
-    public TodoPanel(List<TodoItem> todos, Runnable updateCallback, Runnable switchToCalendarCallback) {
         this.todos = todos;
         this.updateCallback = updateCallback;
-        this.switchToCalendarCallback = switchToCalendarCallback;
+
+        // 初始化 Spinner
+        LocalDateTime now = LocalDateTime.now();
+        yearSpinner = new JSpinner(new SpinnerNumberModel(now.getYear(), 2020, 2099, 1));
+        monthSpinner = new JSpinner(new SpinnerNumberModel(now.getMonthValue(), 1, 12, 1));
+        daySpinner = new JSpinner(new SpinnerNumberModel(now.getDayOfMonth(), 1, 31, 1));
+        hourSpinner = new JSpinner(new SpinnerNumberModel(now.getHour(), 0, 23, 1));
+        minuteSpinner = new JSpinner(new SpinnerNumberModel(now.getMinute(), 0, 59, 1));
+
+        monthSpinner.setEditor(new JSpinner.NumberEditor(monthSpinner, "00"));
+        daySpinner.setEditor(new JSpinner.NumberEditor(daySpinner, "00"));
+        hourSpinner.setEditor(new JSpinner.NumberEditor(hourSpinner, "00"));
+        minuteSpinner.setEditor(new JSpinner.NumberEditor(minuteSpinner, "00"));
 
         setLayout(new BorderLayout());
         setBorder(new EmptyBorder(12, 12, 12, 12));
 
+        // 表格
         JPanel tablePanel = new JPanel(new BorderLayout());
         tablePanel.setBorder(BorderFactory.createTitledBorder("代辦清單"));
         todoTable = new JTable(tableModel);
         todoTable.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         todoTable.setRowHeight(28);
-        todoTable.getColumnModel().getColumn(0).setMaxWidth(50);
-        JScrollPane tableScroll = new JScrollPane(todoTable);
-        tablePanel.add(tableScroll, BorderLayout.CENTER);
+        todoTable.getColumnModel().getColumn(0).setMaxWidth(45);
+        todoTable.getColumnModel().getColumn(2).setPreferredWidth(150);
+
+        // 勾選時更新完成狀態
+        tableModel.addTableModelListener(e -> {
+            if (e.getColumn() == 0) {
+                int row = e.getFirstRow();
+                if (row >= 0 && row < todos.size()) {
+                    todos.get(row).setCompleted((boolean) tableModel.getValueAt(row, 0));
+                    updateCallback.run();
+                    todoTable.repaint();
+                }
+            }
+        });
+
+        // 完成的項目顯示刪除線
+        todoTable.setDefaultRenderer(String.class, (table, value, isSelected, hasFocus, row, col) -> {
+            JLabel label = new JLabel(value != null ? value.toString() : "");
+            label.setOpaque(true);
+            label.setBackground(isSelected ? table.getSelectionBackground() : table.getBackground());
+            label.setForeground(isSelected ? table.getSelectionForeground() : table.getForeground());
+            if (row < todos.size() && todos.get(row).isCompleted()) {
+                label.setText("<html><strike>" + label.getText() + "</strike></html>");
+                label.setForeground(Color.GRAY);
+            }
+            return label;
+        });
+
+        tablePanel.add(new JScrollPane(todoTable), BorderLayout.CENTER);
         add(tablePanel, BorderLayout.CENTER);
 
+        // 右側表單
         JPanel formPanel = new JPanel();
         formPanel.setLayout(new BoxLayout(formPanel, BoxLayout.Y_AXIS));
         formPanel.setBorder(BorderFactory.createTitledBorder("操作區"));
+        formPanel.setPreferredSize(new Dimension(220, 0));
 
-        JPanel fieldPanel = new JPanel(new GridLayout(6, 1, 8, 8));
-        fieldPanel.add(new JLabel("代辦內容："));
-        fieldPanel.add(contentField);
-        fieldPanel.add(new JLabel("日期 (YYYY-MM-DD)："));
-        fieldPanel.add(dateField);
-        fieldPanel.add(new JLabel("時間 (HH:mm)："));
-        fieldPanel.add(timeField);
-        formPanel.add(fieldPanel);
-
-        JButton addButton = new JButton("新增代辦");
-        addButton.addActionListener(e -> addTodo());
-        addButton.setAlignmentX(Component.LEFT_ALIGNMENT);
+        // 內容欄位
+        JPanel contentPanel = new JPanel(new GridLayout(2, 1, 4, 4));
+        contentPanel.add(new JLabel("代辦內容："));
+        contentPanel.add(contentField);
+        formPanel.add(contentPanel);
         formPanel.add(Box.createRigidArea(new Dimension(0, 8)));
-        formPanel.add(addButton);
 
+        // 提醒時間選擇（預設隱藏）
+        reminderPanel = new JPanel();
+        reminderPanel.setLayout(new BoxLayout(reminderPanel, BoxLayout.Y_AXIS));
+        reminderPanel.setVisible(false);
+
+        // 提醒時間勾選
+        reminderCheckBox.setAlignmentX(Component.LEFT_ALIGNMENT);
+        reminderCheckBox.addActionListener(e -> {
+            reminderPanel.setVisible(reminderCheckBox.isSelected());
+        });
+        formPanel.add(reminderCheckBox);
+
+        JPanel dateRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 2, 0));
+        yearSpinner.setPreferredSize(new Dimension(65, 25));
+        monthSpinner.setPreferredSize(new Dimension(45, 25));
+        daySpinner.setPreferredSize(new Dimension(45, 25));
+        dateRow.add(new JLabel("日期："));
+        dateRow.add(yearSpinner);
+        dateRow.add(new JLabel("/"));
+        dateRow.add(monthSpinner);
+        dateRow.add(new JLabel("/"));
+        dateRow.add(daySpinner);
+
+        JPanel timeRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 2, 0));
+        hourSpinner.setPreferredSize(new Dimension(45, 25));
+        minuteSpinner.setPreferredSize(new Dimension(45, 25));
+        timeRow.add(new JLabel("時間："));
+        timeRow.add(hourSpinner);
+        timeRow.add(new JLabel(":"));
+        timeRow.add(minuteSpinner);
+
+        reminderPanel.add(dateRow);
+        reminderPanel.add(timeRow);
+        formPanel.add(reminderPanel);
+        formPanel.add(Box.createRigidArea(new Dimension(0, 8)));
+
+        // 新增按鈕
+        JButton addButton = new JButton("新增代辦");
+        addButton.setAlignmentX(Component.LEFT_ALIGNMENT);
+        addButton.addActionListener(e -> addTodo());
+        formPanel.add(addButton);
+        formPanel.add(Box.createRigidArea(new Dimension(0, 4)));
+
+        // 編輯/刪除按鈕
         JPanel actionButtons = new JPanel(new GridLayout(1, 2, 8, 0));
         editButton.addActionListener(e -> editSelectedTodo());
         deleteButton.addActionListener(e -> deleteSelectedTodo());
@@ -78,7 +165,6 @@ public class TodoPanel extends JPanel {
         deleteButton.setEnabled(false);
         actionButtons.add(editButton);
         actionButtons.add(deleteButton);
-        formPanel.add(Box.createRigidArea(new Dimension(0, 8)));
         formPanel.add(actionButtons);
 
         todoTable.getSelectionModel().addListSelectionListener(e -> {
@@ -87,272 +173,176 @@ public class TodoPanel extends JPanel {
             deleteButton.setEnabled(selected);
         });
 
+        add(formPanel, BorderLayout.EAST);
+
+        // 提醒計時器
         reminderTimer = new Timer(60_000, e -> scanReminders());
         reminderTimer.setInitialDelay(0);
         reminderTimer.start();
 
-        add(formPanel, BorderLayout.EAST);
+        updateTable();
     }
 
-    /**
-     * 新增一筆代辦項目，並檢查內容與時間格式是否正確。
-     */
     private void addTodo() {
         String content = contentField.getText().trim();
-        String date = dateField.getText().trim();
-        String time = timeField.getText().trim();
         if (content.isEmpty()) {
             JOptionPane.showMessageDialog(this, "請輸入代辦內容。", "輸入錯誤", JOptionPane.WARNING_MESSAGE);
             return;
         }
-        if (!isValidDate(date)) {
-            JOptionPane.showMessageDialog(this, "請輸入正確的日期格式，範例：2026-04-20。", "日期格式錯誤", JOptionPane.WARNING_MESSAGE);
-            return;
-        }
-        if (!isValidTime(time)) {
-            JOptionPane.showMessageDialog(this, "請輸入正確的時間格式，範例：09:30。", "時間格式錯誤", JOptionPane.WARNING_MESSAGE);
-            return;
-        }
-        TodoItem todo = new TodoItem(getNextId(), date, time, content);
-        todos.add(todo);
-        updateTable();
-        contentField.setText("");
-        timeField.setText("09:00");
-        updateCallback.run();
-        maybeShowReminder(todo);
-    }
 
-    /**
-     * 編輯目前所選中的代辦項目。
-     */
-    private void editSelectedTodo() {
-        int selectedRow = todoTable.getSelectedRow();
-        if (selectedRow >= 0) {
-            int id = (int) tableModel.getValueAt(selectedRow, 0);
-            TodoItem todo = todos.stream().filter(t -> t.getId() == id).findFirst().orElse(null);
-            if (todo != null) {
-                JTextField editContentField = new JTextField(todo.getContent());
-                JTextField editDateField = new JTextField(todo.getDate());
-                JTextField editTimeField = new JTextField(todo.getTime());
-                JPanel editPanel = new JPanel(new GridLayout(6, 1, 4, 4));
-                editPanel.add(new JLabel("編輯內容："));
-                editPanel.add(editContentField);
-                editPanel.add(new JLabel("編輯日期 (YYYY-MM-DD)："));
-                editPanel.add(editDateField);
-                editPanel.add(new JLabel("編輯時間 (HH:mm)："));
-                editPanel.add(editTimeField);
-
-                int result = JOptionPane.showConfirmDialog(this, editPanel, "編輯代辦", JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
-                if (result == JOptionPane.OK_OPTION) {
-                    String newContent = editContentField.getText().trim();
-                    String newDate = editDateField.getText().trim();
-                    String newTime = editTimeField.getText().trim();
-                    if (newContent.isEmpty()) {
-                        JOptionPane.showMessageDialog(this, "代辦內容不可為空。", "編輯錯誤", JOptionPane.WARNING_MESSAGE);
-                        return;
-                    }
-                    if (!isValidDate(newDate)) {
-                        JOptionPane.showMessageDialog(this, "請輸入正確的日期格式，範例：2026-04-20。", "日期格式錯誤", JOptionPane.WARNING_MESSAGE);
-                        return;
-                    }
-                    if (!isValidTime(newTime)) {
-                        JOptionPane.showMessageDialog(this, "請輸入正確的時間格式，範例：09:30。", "時間格式錯誤", JOptionPane.WARNING_MESSAGE);
-                        return;
-                    }
-                    todo.setContent(newContent);
-                    todo.setDate(newDate);
-                    todo.setTime(newTime);
-                    remindedTodoIds.remove(todo.getId());
-                    updateTable();
-                    updateCallback.run();
-                    maybeShowReminder(todo);
-                }
+        String reminderTime = null;
+        if (reminderCheckBox.isSelected()) {
+            int year = (int) yearSpinner.getValue();
+            int month = (int) monthSpinner.getValue();
+            int day = (int) daySpinner.getValue();
+            int hour = (int) hourSpinner.getValue();
+            int minute = (int) minuteSpinner.getValue();
+            try {
+                LocalDateTime.of(year, month, day, hour, minute);
+            } catch (Exception e) {
+                JOptionPane.showMessageDialog(this, "日期不合法，請重新確認。", "日期錯誤", JOptionPane.WARNING_MESSAGE);
+                return;
             }
+            reminderTime = String.format("%04d-%02d-%02d %02d:%02d", year, month, day, hour, minute);
         }
+
+        todos.add(new TodoItem(getNextId(), content, reminderTime));
+        contentField.setText("");
+        reminderCheckBox.setSelected(false);
+        reminderPanel.setVisible(false);
+        updateTable();
+        updateCallback.run();
     }
 
-    /**
-     * 刪除目前所選中的代辦項目。
-     */
-    private void deleteSelectedTodo() {
-        int selectedRow = todoTable.getSelectedRow();
-        if (selectedRow >= 0) {
-            int id = (int) tableModel.getValueAt(selectedRow, 0);
-            todos.removeIf(t -> t.getId() == id);
-            remindedTodoIds.remove(id);
+    private void editSelectedTodo() {
+        int row = todoTable.getSelectedRow();
+        if (row < 0) return;
+        TodoItem todo = todos.get(row);
+
+        // 編輯內容
+        JTextField editContent = new JTextField(todo.getContent());
+
+        // 提醒時間
+        JCheckBox editReminderCheck = new JCheckBox("設定提醒時間");
+        LocalDateTime reminderDT = null;
+        if (todo.getReminderTime() != null) {
+            try {
+                reminderDT = LocalDateTime.parse(todo.getReminderTime(), REMINDER_FMT);
+                editReminderCheck.setSelected(true);
+            } catch (DateTimeParseException ignored) {}
+        }
+
+        LocalDateTime base = reminderDT != null ? reminderDT : LocalDateTime.now();
+        JSpinner eYear = new JSpinner(new SpinnerNumberModel(base.getYear(), 2020, 2099, 1));
+        JSpinner eMonth = new JSpinner(new SpinnerNumberModel(base.getMonthValue(), 1, 12, 1));
+        JSpinner eDay = new JSpinner(new SpinnerNumberModel(base.getDayOfMonth(), 1, 31, 1));
+        JSpinner eHour = new JSpinner(new SpinnerNumberModel(base.getHour(), 0, 23, 1));
+        JSpinner eMinute = new JSpinner(new SpinnerNumberModel(base.getMinute(), 0, 59, 1));
+
+        eMonth.setEditor(new JSpinner.NumberEditor(eMonth, "00"));
+        eDay.setEditor(new JSpinner.NumberEditor(eDay, "00"));
+        eHour.setEditor(new JSpinner.NumberEditor(eHour, "00"));
+        eMinute.setEditor(new JSpinner.NumberEditor(eMinute, "00"));
+
+        JPanel dateRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 2, 0));
+        eYear.setPreferredSize(new Dimension(65, 25));
+        eMonth.setPreferredSize(new Dimension(45, 25));
+        eDay.setPreferredSize(new Dimension(45, 25));
+        dateRow.add(eYear); dateRow.add(new JLabel("/")); 
+        dateRow.add(eMonth); dateRow.add(new JLabel("/"));
+        dateRow.add(eDay);
+
+        JPanel timeRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 2, 0));
+        eHour.setPreferredSize(new Dimension(45, 25));
+        eMinute.setPreferredSize(new Dimension(45, 25));
+        timeRow.add(eHour); timeRow.add(new JLabel(":"));
+        timeRow.add(eMinute);
+
+        JPanel editReminderPanel = new JPanel();
+        editReminderPanel.setLayout(new BoxLayout(editReminderPanel, BoxLayout.Y_AXIS));
+        editReminderPanel.add(dateRow);
+        editReminderPanel.add(timeRow);
+        editReminderPanel.setVisible(editReminderCheck.isSelected());
+        editReminderCheck.addActionListener(e -> editReminderPanel.setVisible(editReminderCheck.isSelected()));
+
+        JPanel panel = new JPanel();
+        panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
+        panel.add(new JLabel("編輯內容："));
+        panel.add(editContent);
+        panel.add(Box.createRigidArea(new Dimension(0, 8)));
+        panel.add(editReminderCheck);
+        panel.add(editReminderPanel);
+
+        int result = JOptionPane.showConfirmDialog(this, panel, "編輯代辦", JOptionPane.OK_CANCEL_OPTION);
+        if (result == JOptionPane.OK_OPTION) {
+            String newContent = editContent.getText().trim();
+            if (newContent.isEmpty()) {
+                JOptionPane.showMessageDialog(this, "內容不可為空。", "編輯錯誤", JOptionPane.WARNING_MESSAGE);
+                return;
+            }
+            String newReminder = null;
+            if (editReminderCheck.isSelected()) {
+                int y = (int) eYear.getValue();
+                int mo = (int) eMonth.getValue();
+                int d = (int) eDay.getValue();
+                int h = (int) eHour.getValue();
+                int mi = (int) eMinute.getValue();
+                try {
+                    LocalDateTime.of(y, mo, d, h, mi);
+                } catch (Exception e) {
+                    JOptionPane.showMessageDialog(this, "日期不合法。", "日期錯誤", JOptionPane.WARNING_MESSAGE);
+                    return;
+                }
+                newReminder = String.format("%04d-%02d-%02d %02d:%02d", y, mo, d, h, mi);
+            }
+            todo.setContent(newContent);
+            todo.setReminderTime(newReminder);
+            remindedIds.remove(todo.getId());
             updateTable();
             updateCallback.run();
-            if (switchToCalendarCallback != null) {
-                switchToCalendarCallback.run();
-            }
+            maybeShowReminder(todo);
         }
     }
 
-    /**
-     * 排序代辦項目後更新表格顯示。
-     */
+    private void deleteSelectedTodo() {
+        int row = todoTable.getSelectedRow();
+        if (row < 0) return;
+        remindedIds.remove(todos.get(row).getId());
+        todos.remove(row);
+        updateTable();
+        updateCallback.run();
+    }
+
     public void updateTable() {
-        sortTodosByDateTime();
         tableModel.setRowCount(0);
         for (TodoItem todo : todos) {
-            tableModel.addRow(new Object[]{todo.getId(), todo.getDate(), todo.getTime(), todo.getContent()});
+            tableModel.addRow(new Object[]{
+                    todo.isCompleted(),
+                    todo.getContent(),
+                    todo.getReminderTime() != null ? todo.getReminderTime() : ""
+            });
         }
     }
 
-    /**
-     * 依據代辦日期與時間排序代辦項目。
-     */
-    private void sortTodosByDateTime() {
-        todos.sort((a, b) -> {
-            LocalDate dateA = parseTodoDate(a.getDate());
-            LocalDate dateB = parseTodoDate(b.getDate());
-            if (dateA != null && dateB != null) {
-                int dateCompare = dateA.compareTo(dateB);
-                if (dateCompare != 0) {
-                    return dateCompare;
-                }
-            } else if (dateA != null) {
-                return -1;
-            } else if (dateB != null) {
-                return 1;
+    private void maybeShowReminder(TodoItem todo) {
+        if (todo.getReminderTime() == null) return;
+        try {
+            LocalDateTime target = LocalDateTime.parse(todo.getReminderTime(), REMINDER_FMT);
+            long diff = java.time.Duration.between(LocalDateTime.now(), target).toMinutes();
+            if (diff >= 0 && diff <= 240 && !remindedIds.contains(todo.getId())) {
+                remindedIds.add(todo.getId());
+                JOptionPane.showMessageDialog(this,
+                        String.format("提醒：「%s」將在四小時內到期。", todo.getContent()),
+                        "代辦提醒", JOptionPane.INFORMATION_MESSAGE);
             }
-            LocalTime timeA = LocalTime.parse(a.getTime(), DateTimeFormatter.ofPattern("HH:mm"));
-            LocalTime timeB = LocalTime.parse(b.getTime(), DateTimeFormatter.ofPattern("HH:mm"));
-            return timeA.compareTo(timeB);
-        });
+        } catch (DateTimeParseException ignored) {}
     }
 
-    private LocalDate parseTodoDate(String dateText) {
-        try {
-            return LocalDate.parse(dateText, DateTimeFormatter.ISO_LOCAL_DATE);
-        } catch (DateTimeParseException e) {
-            DayOfWeek targetDay = parseDayOfWeek(dateText);
-            if (targetDay == null) {
-                return null;
-            }
-            LocalDate today = LocalDate.now();
-            int daysUntil = (targetDay.getValue() - today.getDayOfWeek().getValue() + 7) % 7;
-            return today.plusDays(daysUntil);
-        }
-    }
-
-    /**
-     * 驗證時間格式是否為 HH:mm。
-     *
-     * @param time 時間字串
-     * @return 若格式正確回傳 true
-     */
-    private boolean isValidDate(String date) {
-        try {
-            LocalDate.parse(date, DateTimeFormatter.ISO_LOCAL_DATE);
-            return true;
-        } catch (DateTimeParseException e) {
-            return false;
-        }
-    }
-
-    private boolean isValidTime(String time) {
-        try {
-            LocalTime.parse(time, DateTimeFormatter.ofPattern("HH:mm"));
-            return true;
-        } catch (DateTimeParseException e) {
-            return false;
-        }
+    private void scanReminders() {
+        for (TodoItem todo : todos) maybeShowReminder(todo);
     }
 
     private int getNextId() {
         return todos.isEmpty() ? 1 : todos.stream().mapToInt(TodoItem::getId).max().orElse(0) + 1;
-    }
-
-    /**
-     * 若代辦時間距離現在四小時內，則顯示提醒訊息。
-     *
-     * @param todo 要檢查的代辦項目
-     */
-    private void maybeShowReminder(TodoItem todo) {
-        LocalDateTime targetDateTime = parseTodoDateTime(todo);
-        if (targetDateTime == null) {
-            return;
-        }
-        LocalDateTime now = LocalDateTime.now();
-        long diffMinutes = Duration.between(now, targetDateTime).toMinutes();
-        if (diffMinutes >= 0 && diffMinutes <= 240 && !remindedTodoIds.contains(todo.getId())) {
-            remindedTodoIds.add(todo.getId());
-            JOptionPane.showMessageDialog(this,
-                    String.format("提醒：代辦「%s」於 %s %s 將在四小時內到達。", todo.getContent(), todo.getDate(), todo.getTime()),
-                    "即時提醒", JOptionPane.INFORMATION_MESSAGE);
-        }
-    }
-
-    /**
-     * 將代辦項目的日期與時間解析為 LocalDateTime。
-     *
-     * @param todo 代辦項目
-     * @return 解析後的日期時間，若格式錯誤回傳 null
-     */
-    private LocalDateTime parseTodoDateTime(TodoItem todo) {
-        try {
-            LocalDate date;
-            boolean weekdayFormat = false;
-            try {
-                date = LocalDate.parse(todo.getDate(), DateTimeFormatter.ISO_LOCAL_DATE);
-            } catch (DateTimeParseException e) {
-                DayOfWeek targetDay = parseDayOfWeek(todo.getDate());
-                if (targetDay == null) {
-                    return null;
-                }
-                LocalDate today = LocalDate.now();
-                int daysUntil = (targetDay.getValue() - today.getDayOfWeek().getValue() + 7) % 7;
-                date = today.plusDays(daysUntil);
-                weekdayFormat = true;
-            }
-            LocalTime time = LocalTime.parse(todo.getTime(), DateTimeFormatter.ofPattern("HH:mm"));
-            LocalDateTime targetDateTime = LocalDateTime.of(date, time);
-            if (weekdayFormat && targetDateTime.isBefore(LocalDateTime.now())) {
-                targetDateTime = targetDateTime.plusDays(7);
-            }
-            return targetDateTime;
-        } catch (DateTimeParseException e) {
-            return null;
-        }
-    }
-
-    /**
-     * 定期掃描所有代辦項目，若有代辦進入四小時提醒範圍則顯示通知。
-     */
-    private void scanReminders() {
-        LocalDateTime now = LocalDateTime.now();
-        for (TodoItem todo : todos) {
-            LocalDateTime targetDateTime = parseTodoDateTime(todo);
-            if (targetDateTime == null) {
-                continue;
-            }
-            long diffMinutes = Duration.between(now, targetDateTime).toMinutes();
-            if (diffMinutes >= 0 && diffMinutes <= 240 && !remindedTodoIds.contains(todo.getId())) {
-                remindedTodoIds.add(todo.getId());
-                JOptionPane.showMessageDialog(this,
-                        String.format("提醒：代辦「%s」於 %s %s 將在四小時內到達。", todo.getContent(), todo.getDate(), todo.getTime()),
-                        "即時提醒", JOptionPane.INFORMATION_MESSAGE);
-            }
-        }
-    }
-
-    /**
-     * 將中文星期字串轉為 DayOfWeek 列舉值。
-     *
-     * @param day 中文星期字串
-     * @return 轉換後的 DayOfWeek，若無法轉換回傳 null
-     */
-    private DayOfWeek parseDayOfWeek(String day) {
-        switch (day) {
-            case "星期一": return DayOfWeek.MONDAY;
-            case "星期二": return DayOfWeek.TUESDAY;
-            case "星期三": return DayOfWeek.WEDNESDAY;
-            case "星期四": return DayOfWeek.THURSDAY;
-            case "星期五": return DayOfWeek.FRIDAY;
-            case "星期六": return DayOfWeek.SATURDAY;
-            case "星期日": return DayOfWeek.SUNDAY;
-            default: return null;
-        }
     }
 }
