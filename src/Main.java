@@ -19,8 +19,8 @@ public class Main {
     private final List<TodoItem> tasks = new ArrayList<>();
     private final List<TodoItem> todos = new ArrayList<>();
     private UIManager uiManager;
-    private static final String TASKS_XML_FILE = "tasks.xml";
-    private static final String TODOS_XML_FILE = "todos.xml";
+    private static final String TASKS_XML_FILE = "data/tasks.xml";
+    private static final String TODOS_XML_FILE = "data/todos.xml";
 
     /**
      * 建構 Main 物件，先載入 XML 資料，再建立 UI 管理器。
