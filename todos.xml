@@ -1,21 +1,2 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
-<todoData>
-    <todo>
-        <id>1</id>
-        <date>2026-04-20</date>
-        <content>k</content>
-        <time>09:00</time>
-    </todo>
-    <todo>
-        <id>2</id>
-        <date>2026-04-20</date>
-        <content>ok</content>
-        <time>15:54</time>
-    </todo>
-    <todo>
-        <id>3</id>
-        <date>2026-04-20</date>
-        <content>ppp</content>
-        <time>18:00</time>
-    </todo>
-</todoData>
+<todoData/>
