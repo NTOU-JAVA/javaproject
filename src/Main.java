@@ -51,7 +51,13 @@ public class Main {
                 String date = el.getElementsByTagName("date").item(0).getTextContent();
                 String time = el.getElementsByTagName("time").item(0).getTextContent();
                 String content = el.getElementsByTagName("content").item(0).getTextContent();
-                tasks.add(new Task(id, date, time, content));
+                Task task = new Task(id, date, time, content);
+                // 載入重要標誌
+                if (el.getElementsByTagName("important").getLength() > 0) {
+                    boolean important = Boolean.parseBoolean(el.getElementsByTagName("important").item(0).getTextContent());
+                    task.setImportant(important);
+                }
+                tasks.add(task);
             }
         } catch (Exception e) {
             e.printStackTrace();
@@ -103,6 +109,7 @@ public class Main {
                 appendText(doc, el, "date", task.getDate());
                 appendText(doc, el, "time", task.getTime());
                 appendText(doc, el, "content", task.getContent());
+                appendText(doc, el, "important", String.valueOf(task.isImportant()));
             }
             writeXML(doc, TASKS_XML_FILE);
         } catch (Exception e) {

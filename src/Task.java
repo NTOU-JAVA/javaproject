@@ -1,11 +1,12 @@
 /**
- * Task 表示一筆行事曆任務，包含日期、時間與內容。
+ * Task 表示一筆行事曆任務，包含日期、時間、內容與重要性標記。
  */
 public class Task {
     private int id;
     private String date;
     private String time;
     private String content;
+    private boolean important; // 是否為重要任務
 
     public Task() {}
 
@@ -22,6 +23,7 @@ public class Task {
         this.date = date;
         this.time = time;
         this.content = content;
+        this.important = false;
     }
 
     public int getId() { return id; }
@@ -35,4 +37,7 @@ public class Task {
 
     public String getContent() { return content; }
     public void setContent(String content) { this.content = content; }
+
+    public boolean isImportant() { return important; }
+    public void setImportant(boolean important) { this.important = important; }
 }

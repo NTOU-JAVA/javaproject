@@ -1,12 +1,14 @@
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import java.awt.*;
-import java.awt.event.*;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
+import java.util.HashSet;
 
 /**
  * CalendarPanel 顯示一週七天的任務行事曆，支援週切換與新增任務。
@@ -29,9 +31,12 @@ public class CalendarPanel extends JPanel {
     private final JSpinner hourSpinner;
     private final JSpinner minuteSpinner;
     private final JTextField contentField = new JTextField();
+    private final JCheckBox importantCheckBox = new JCheckBox("重要任務");
     private final List<JList<Task>> dayTaskLists = new ArrayList<>();
     private Task selectedTask = null;
     private int selectedDayIndex = -1;
+    private final Timer reminderTimer;
+    private final Set<Integer> remindedIds = new HashSet<>();
 
     public CalendarPanel(List<Task> tasks) {
         this.tasks = tasks;
@@ -101,7 +106,8 @@ public class CalendarPanel extends JPanel {
                     JLabel label = (JLabel) super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
                     if (value instanceof Task) {
                         Task task = (Task) value;
-                        label.setText("• " + task.getTime() + " " + task.getContent());
+                        String prefix = task.isImportant() ? "★ " : "• ";
+                        label.setText(prefix + task.getTime() + " " + task.getContent());
                         label.setBorder(BorderFactory.createEmptyBorder(2, 4, 2, 4));
                     }
                     return label;
@@ -179,6 +185,11 @@ public class CalendarPanel extends JPanel {
         formPanel.add(timePanel);
         formPanel.add(Box.createRigidArea(new Dimension(0, 8)));
 
+        // 重要性設定
+        importantCheckBox.setAlignmentX(Component.LEFT_ALIGNMENT);
+        formPanel.add(importantCheckBox);
+        formPanel.add(Box.createRigidArea(new Dimension(0, 8)));
+
         JButton addButton = new JButton("新增任務");
         addButton.setAlignmentX(Component.LEFT_ALIGNMENT);
         addButton.addActionListener(e -> addTask());
@@ -201,6 +212,12 @@ public class CalendarPanel extends JPanel {
         add(formPanel, BorderLayout.EAST);
 
         updateCalendar();
+
+
+        // 提醒計時器
+        reminderTimer = new Timer(60_000, e -> scanReminders());
+        reminderTimer.setInitialDelay(0);
+        reminderTimer.start();
     }
 
     private void addTask() {
@@ -228,9 +245,12 @@ public class CalendarPanel extends JPanel {
         String time = String.format("%02d:%02d", hour, minute);
 
         int nextId = tasks.isEmpty() ? 1 : tasks.stream().mapToInt(Task::getId).max().orElse(0) + 1;
-        tasks.add(new Task(nextId, date, time, content));
+        Task newTask = new Task(nextId, date, time, content);
+        newTask.setImportant(importantCheckBox.isSelected());
+        tasks.add(newTask);
 
         contentField.setText("");
+        importantCheckBox.setSelected(false);
         updateCalendar();
     }
 
@@ -270,14 +290,21 @@ public class CalendarPanel extends JPanel {
         timeRow.add(eHour); timeRow.add(new JLabel(":"));
         timeRow.add(eMinute);
 
+        // 重要性複選框
+        JCheckBox eImportant = new JCheckBox("重要任務", selectedTask.isImportant());
+
         JPanel editPanel = new JPanel();
         editPanel.setLayout(new BoxLayout(editPanel, BoxLayout.Y_AXIS));
         editPanel.add(new JLabel("編輯內容："));
         editPanel.add(editContent);
         editPanel.add(Box.createRigidArea(new Dimension(0, 8)));
+        editPanel.add(new JLabel("編輯日期："));
         editPanel.add(dateRow);
         editPanel.add(Box.createRigidArea(new Dimension(0, 8)));
+        editPanel.add(new JLabel("編輯時間："));
         editPanel.add(timeRow);
+        editPanel.add(Box.createRigidArea(new Dimension(0, 8)));
+        editPanel.add(eImportant);
 
         int result = JOptionPane.showConfirmDialog(this, editPanel, "編輯任務", JOptionPane.OK_CANCEL_OPTION);
         if (result == JOptionPane.OK_OPTION) {
@@ -300,6 +327,8 @@ public class CalendarPanel extends JPanel {
             selectedTask.setContent(newContent);
             selectedTask.setDate(String.format("%04d-%02d-%02d", y, mo, d));
             selectedTask.setTime(String.format("%02d:%02d", h, mi));
+            selectedTask.setImportant(eImportant.isSelected());
+            remindedIds.remove(selectedTask.getId());
             selectedTask = null;
             updateCalendar();
         }
@@ -310,6 +339,7 @@ public class CalendarPanel extends JPanel {
             JOptionPane.showMessageDialog(this, "請先點選要刪除的任務。", "提示", JOptionPane.INFORMATION_MESSAGE);
             return;
         }
+        remindedIds.remove(selectedTask.getId());
         tasks.remove(selectedTask);
         selectedTask = null;
         updateCalendar();
@@ -347,5 +377,26 @@ public class CalendarPanel extends JPanel {
                 taskList.clearSelection();
             }
         }
+    }
+
+    private void scanReminders() {
+        for (Task task : tasks) {
+            maybeShowReminder(task);
+        }
+    }
+
+    private void maybeShowReminder(Task task) {
+        if (!task.isImportant()) return;
+        try {
+            String dateTimeStr = task.getDate() + " " + task.getTime();
+            LocalDateTime target = LocalDateTime.parse(dateTimeStr, DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"));
+            long diff = java.time.Duration.between(LocalDateTime.now(), target).toMinutes();
+            if (diff >= 0 && diff <= 240 && !remindedIds.contains(task.getId())) {
+                remindedIds.add(task.getId());
+                JOptionPane.showMessageDialog(this,
+                        String.format("提醒：重要任務「%s」將在四小時內到期。", task.getContent()),
+                        "任務提醒", JOptionPane.INFORMATION_MESSAGE);
+            }
+        } catch (DateTimeParseException ignored) {}
     }
 }
