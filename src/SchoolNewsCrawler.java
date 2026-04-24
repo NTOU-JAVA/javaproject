@@ -52,7 +52,7 @@ public class SchoolNewsCrawler {
                 String title = link.text();
                 String href = link.attr("href");
 
-                if (title.contains("校園行事曆") || title.contains("公告") || !title.isEmpty()) {
+                if (!title.isEmpty()) {
                     // 補完相對路徑
                     if (!href.startsWith("http")) {
                         href = SCHOOL_URL + href;
