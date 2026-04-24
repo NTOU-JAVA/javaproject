@@ -1,7 +1,7 @@
 import java.awt.Color;
 
 /**
- * AppColors 統一定義整個應用程式的色彩系統。
+ * AppColors 統一定義整個應用程式的色彩系統。.
  */
 public class AppColors {
     // 背景層次
