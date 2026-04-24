@@ -1,43 +1,69 @@
 /**
- * Task 表示一筆行事曆任務，包含日期、時間、內容與重要性標記。
+ * Task 表示一筆行事曆任務。
+ * 新增：title（標題）、description（詳細內容）、completed（完成狀態）
+ * deadline 即原本的 date+time，可選（hasDeadline 為 false 時不顯示）
  */
 public class Task {
-    private int id;
-    private String date;
-    private String time;
-    private String content;
-    private boolean important; // 是否為重要任務
+    private int     id;
+    private String  title;
+    private String  description; // 詳細說明，可為空字串
+    private String  date;        // 格式 YYYY-MM-DD，hasDeadline=false 時為空字串
+    private String  time;        // 格式 HH:mm，hasDeadline=false 時為空字串
+    private boolean hasDeadline;
+    private boolean important;
+    private boolean completed;
 
     public Task() {}
 
-    /**
-     * 建構完整的任務項目。
-     *
-     * @param id      任務編號
-     * @param date    任務日期（格式 YYYY-MM-DD）
-     * @param time    任務時間（格式 HH:mm）
-     * @param content 任務內容
-     */
-    public Task(int id, String date, String time, String content) {
-        this.id = id;
-        this.date = date;
-        this.time = time;
-        this.content = content;
-        this.important = false;
+    public Task(int id, String title, String description,
+                String date, String time, boolean hasDeadline) {
+        this.id          = id;
+        this.title       = title;
+        this.description = description;
+        this.date        = date;
+        this.time        = time;
+        this.hasDeadline = hasDeadline;
+        this.important   = false;
+        this.completed   = false;
     }
 
-    public int getId() { return id; }
-    public void setId(int id) { this.id = id; }
+    // 向下相容舊建構子（date+time 固定存在）
+    public Task(int id, String date, String time, String content) {
+        this.id          = id;
+        this.title       = content;
+        this.description = "";
+        this.date        = date;
+        this.time        = time;
+        this.hasDeadline = true;
+        this.important   = false;
+        this.completed   = false;
+    }
 
-    public String getDate() { return date; }
-    public void setDate(String date) { this.date = date; }
+    public int     getId()          { return id; }
+    public void    setId(int id)    { this.id = id; }
 
-    public String getTime() { return time; }
-    public void setTime(String time) { this.time = time; }
+    public String  getTitle()                { return title != null ? title : ""; }
+    public void    setTitle(String title)    { this.title = title; }
 
-    public String getContent() { return content; }
-    public void setContent(String content) { this.content = content; }
+    // getContent / setContent 為 legacy alias（XML 讀寫與 CalendarPanel 仍用此名）
+    public String  getContent()              { return getTitle(); }
+    public void    setContent(String c)      { setTitle(c); }
 
-    public boolean isImportant() { return important; }
-    public void setImportant(boolean important) { this.important = important; }
+    public String  getDescription()                    { return description != null ? description : ""; }
+    public void    setDescription(String description)  { this.description = description; }
+
+    public String  getDate()                { return date != null ? date : ""; }
+    public void    setDate(String date)     { this.date = date; }
+
+    public String  getTime()                { return time != null ? time : ""; }
+    public void    setTime(String time)     { this.time = time; }
+
+    public boolean hasDeadline()                       { return hasDeadline; }
+    public void    setHasDeadline(boolean hasDeadline) { this.hasDeadline = hasDeadline; }
+
+    public boolean isImportant()                    { return important; }
+    public void    setImportant(boolean important)  { this.important = important; }
+
+    public boolean isCompleted()                    { return completed; }
+    public void    setCompleted(boolean completed)  { this.completed = completed; }
 }

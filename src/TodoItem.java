@@ -1,37 +1,46 @@
 /**
- * TodoItem 表示一筆代辦事項，包含內容、提醒時間與完成狀態。
+ * TodoItem 表示一筆代辦事項。
+ * 新增：title（標題）、description（詳細說明）
+ * reminderTime 改為可選的 deadline（語意更清楚）
  */
 public class TodoItem {
-    private int id;
-    private String content;
-    private String reminderTime; // 格式 YYYY-MM-DD HH:mm，可為 null
+    private int     id;
+    private String  title;
+    private String  description;  // 詳細說明，可為空字串
+    private String  reminderTime; // 格式 YYYY-MM-DD HH:mm，可為 null（無 deadline）
     private boolean completed;
 
     public TodoItem() {}
 
-    /**
-     * 建構代辦事項。
-     *
-     * @param id           代辦編號
-     * @param content      代辦內容
-     * @param reminderTime 提醒時間（可為 null）
-     */
-    public TodoItem(int id, String content, String reminderTime) {
-        this.id = id;
-        this.content = content;
+    public TodoItem(int id, String title, String description, String reminderTime) {
+        this.id          = id;
+        this.title       = title;
+        this.description = description;
         this.reminderTime = reminderTime;
-        this.completed = false;
+        this.completed   = false;
     }
 
-    public int getId() { return id; }
-    public void setId(int id) { this.id = id; }
+    // 向下相容舊建構子
+    public TodoItem(int id, String content, String reminderTime) {
+        this(id, content, "", reminderTime);
+    }
 
-    public String getContent() { return content; }
-    public void setContent(String content) { this.content = content; }
+    public int     getId()          { return id; }
+    public void    setId(int id)    { this.id = id; }
 
-    public String getReminderTime() { return reminderTime; }
-    public void setReminderTime(String reminderTime) { this.reminderTime = reminderTime; }
+    public String  getTitle()               { return title != null ? title : ""; }
+    public void    setTitle(String title)   { this.title = title; }
 
-    public boolean isCompleted() { return completed; }
-    public void setCompleted(boolean completed) { this.completed = completed; }
+    // getContent / setContent 為 legacy alias
+    public String  getContent()             { return getTitle(); }
+    public void    setContent(String c)     { setTitle(c); }
+
+    public String  getDescription()                   { return description != null ? description : ""; }
+    public void    setDescription(String description) { this.description = description; }
+
+    public String  getReminderTime()                       { return reminderTime; }
+    public void    setReminderTime(String reminderTime)    { this.reminderTime = reminderTime; }
+
+    public boolean isCompleted()                    { return completed; }
+    public void    setCompleted(boolean completed)  { this.completed = completed; }
 }

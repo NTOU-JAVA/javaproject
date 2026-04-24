@@ -24,7 +24,9 @@ public class AppUIManager {
                         Runnable saveTasksCallback, Runnable saveTodosCallback) {
         this.frame = frame;
         this.calendarPanel = new CalendarPanel(tasks);
-        this.todoPanel = new TodoPanel(todos, this::updateUI);
+        // 傳入 saveTodosCallback 而非 this::updateUI，
+        // 避免勾選完成後呼叫 updateUI 造成 updateTable 重排而跳位
+        this.todoPanel = new TodoPanel(todos, saveTodosCallback);
         initializeUI(saveTasksCallback, saveTodosCallback);
     }
 
@@ -57,10 +59,9 @@ public class AppUIManager {
     }
 
     /**
-     * 更新整體介面。
+     * 更新整體介面（僅更新行事曆，不重建代辦表格以免跳位）。
      */
     public void updateUI() {
-        todoPanel.updateTable();
         calendarPanel.updateCalendar();
     }
 

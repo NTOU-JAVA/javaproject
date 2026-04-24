@@ -13,129 +13,140 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Main 是應用程式進入點，負責初始化資料與 UI。
+ * Main：應用程式進入點，負責初始化資料與 UI。
  */
 public class Main {
-    private final List<Task> tasks = new ArrayList<>();
+    private final List<Task>     tasks = new ArrayList<>();
     private final List<TodoItem> todos = new ArrayList<>();
-    private AppUIManager uiManager;
-    private static final String TASKS_XML_FILE = "data/tasks.xml";
-    private static final String TODOS_XML_FILE = "data/todos.xml";
+    private MainFrame mainFrame;
+    private static final String TASKS_XML = "data/tasks.xml";
+    private static final String TODOS_XML = "data/todos.xml";
 
     public Main() {
         new File("data").mkdirs();
         loadTasksFromXML();
         loadTodosFromXML();
-        uiManager = new AppUIManager(new JFrame(), tasks, todos, this::saveTasksToXML, this::saveTodosToXML);
+        mainFrame = new MainFrame(tasks, todos, this::saveTasksToXML, this::saveTodosToXML);
     }
 
     public static void main(String[] args) {
         SwingUtilities.invokeLater(() -> {
             Main app = new Main();
-            app.uiManager.show();
+            app.mainFrame.showWindow();
         });
     }
 
+    // ── 載入 ──────────────────────────────────────────────────────────────
     private void loadTasksFromXML() {
         try {
-            File file = new File(TASKS_XML_FILE);
+            File file = new File(TASKS_XML);
             if (!file.exists()) return;
-            DocumentBuilderFactory dbFactory = DocumentBuilderFactory.newInstance();
-            DocumentBuilder dBuilder = dbFactory.newDocumentBuilder();
-            Document doc = dBuilder.parse(file);
+            DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
+            DocumentBuilder db = dbf.newDocumentBuilder();
+            Document doc = db.parse(file);
             doc.getDocumentElement().normalize();
-            NodeList nodeList = doc.getElementsByTagName("task");
-            for (int i = 0; i < nodeList.getLength(); i++) {
-                Element el = (Element) nodeList.item(i);
-                int id = Integer.parseInt(el.getElementsByTagName("id").item(0).getTextContent());
-                String date = el.getElementsByTagName("date").item(0).getTextContent();
-                String time = el.getElementsByTagName("time").item(0).getTextContent();
-                String content = el.getElementsByTagName("content").item(0).getTextContent();
-                Task task = new Task(id, date, time, content);
-                // 載入重要標誌
-                if (el.getElementsByTagName("important").getLength() > 0) {
-                    boolean important = Boolean.parseBoolean(el.getElementsByTagName("important").item(0).getTextContent());
-                    task.setImportant(important);
-                }
-                tasks.add(task);
+            NodeList nl = doc.getElementsByTagName("task");
+            for (int i = 0; i < nl.getLength(); i++) {
+                Element el = (Element) nl.item(i);
+                int    id      = parseInt(el, "id", 0);
+                String title   = getText(el, "title",
+                                   getText(el, "content", "")); // 向下相容
+                String desc    = getText(el, "description", "");
+                String date    = getText(el, "date", "");
+                String time    = getText(el, "time", "");
+                boolean hasDeadline = !date.isEmpty();
+                // 如果 XML 裡有 hasDeadline 欄位以它為準
+                if (el.getElementsByTagName("hasDeadline").getLength() > 0)
+                    hasDeadline = Boolean.parseBoolean(getText(el, "hasDeadline", "true"));
+
+                Task t = new Task(id, title, desc, date, time, hasDeadline);
+                t.setImportant(Boolean.parseBoolean(getText(el, "important", "false")));
+                t.setCompleted(Boolean.parseBoolean(getText(el, "completed", "false")));
+                tasks.add(t);
             }
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
+        } catch (Exception e) { e.printStackTrace(); }
     }
 
     private void loadTodosFromXML() {
         try {
-            File file = new File(TODOS_XML_FILE);
+            File file = new File(TODOS_XML);
             if (!file.exists()) return;
-            DocumentBuilderFactory dbFactory = DocumentBuilderFactory.newInstance();
-            DocumentBuilder dBuilder = dbFactory.newDocumentBuilder();
-            Document doc = dBuilder.parse(file);
+            DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
+            DocumentBuilder db = dbf.newDocumentBuilder();
+            Document doc = db.parse(file);
             doc.getDocumentElement().normalize();
-            NodeList nodeList = doc.getElementsByTagName("todo");
-            for (int i = 0; i < nodeList.getLength(); i++) {
-                Element el = (Element) nodeList.item(i);
-                int id = Integer.parseInt(el.getElementsByTagName("id").item(0).getTextContent());
-                String content = el.getElementsByTagName("content").item(0).getTextContent();
-                String reminderTime = null;
-                if (el.getElementsByTagName("reminderTime").getLength() > 0) {
-                    String rt = el.getElementsByTagName("reminderTime").item(0).getTextContent();
-                    if (!rt.isEmpty()) reminderTime = rt;
-                }
-                boolean completed = false;
-                if (el.getElementsByTagName("completed").getLength() > 0) {
-                    completed = Boolean.parseBoolean(el.getElementsByTagName("completed").item(0).getTextContent());
-                }
-                TodoItem todo = new TodoItem(id, content, reminderTime);
-                todo.setCompleted(completed);
-                todos.add(todo);
+            NodeList nl = doc.getElementsByTagName("todo");
+            for (int i = 0; i < nl.getLength(); i++) {
+                Element el = (Element) nl.item(i);
+                int    id      = parseInt(el, "id", 0);
+                String title   = getText(el, "title",
+                                   getText(el, "content", ""));
+                String desc    = getText(el, "description", "");
+                String rt      = getText(el, "reminderTime", "");
+                if (rt.isEmpty()) rt = null;
+
+                TodoItem item = new TodoItem(id, title, desc, rt);
+                item.setCompleted(Boolean.parseBoolean(getText(el, "completed", "false")));
+                todos.add(item);
             }
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
+        } catch (Exception e) { e.printStackTrace(); }
     }
 
+    // ── 儲存 ──────────────────────────────────────────────────────────────
     private void saveTasksToXML() {
         try {
-            DocumentBuilderFactory dbFactory = DocumentBuilderFactory.newInstance();
-            DocumentBuilder dBuilder = dbFactory.newDocumentBuilder();
-            Document doc = dBuilder.newDocument();
+            DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
+            DocumentBuilder db = dbf.newDocumentBuilder();
+            Document doc = db.newDocument();
             Element root = doc.createElement("taskData");
             doc.appendChild(root);
-            for (Task task : tasks) {
+            for (Task t : tasks) {
                 Element el = doc.createElement("task");
                 root.appendChild(el);
-                appendText(doc, el, "id", String.valueOf(task.getId()));
-                appendText(doc, el, "date", task.getDate());
-                appendText(doc, el, "time", task.getTime());
-                appendText(doc, el, "content", task.getContent());
-                appendText(doc, el, "important", String.valueOf(task.isImportant()));
+                appendText(doc, el, "id",          String.valueOf(t.getId()));
+                appendText(doc, el, "title",        t.getTitle());
+                appendText(doc, el, "description",  t.getDescription());
+                appendText(doc, el, "date",         t.getDate());
+                appendText(doc, el, "time",         t.getTime());
+                appendText(doc, el, "hasDeadline",  String.valueOf(t.hasDeadline()));
+                appendText(doc, el, "important",    String.valueOf(t.isImportant()));
+                appendText(doc, el, "completed",    String.valueOf(t.isCompleted()));
             }
-            writeXML(doc, TASKS_XML_FILE);
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
+            writeXML(doc, TASKS_XML);
+        } catch (Exception e) { e.printStackTrace(); }
     }
 
     private void saveTodosToXML() {
         try {
-            DocumentBuilderFactory dbFactory = DocumentBuilderFactory.newInstance();
-            DocumentBuilder dBuilder = dbFactory.newDocumentBuilder();
-            Document doc = dBuilder.newDocument();
+            DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
+            DocumentBuilder db = dbf.newDocumentBuilder();
+            Document doc = db.newDocument();
             Element root = doc.createElement("todoData");
             doc.appendChild(root);
-            for (TodoItem todo : todos) {
+            for (TodoItem t : todos) {
                 Element el = doc.createElement("todo");
                 root.appendChild(el);
-                appendText(doc, el, "id", String.valueOf(todo.getId()));
-                appendText(doc, el, "content", todo.getContent());
-                appendText(doc, el, "reminderTime", todo.getReminderTime() != null ? todo.getReminderTime() : "");
-                appendText(doc, el, "completed", String.valueOf(todo.isCompleted()));
+                appendText(doc, el, "id",           String.valueOf(t.getId()));
+                appendText(doc, el, "title",         t.getTitle());
+                appendText(doc, el, "description",   t.getDescription());
+                appendText(doc, el, "reminderTime",  t.getReminderTime() != null ? t.getReminderTime() : "");
+                appendText(doc, el, "completed",     String.valueOf(t.isCompleted()));
             }
-            writeXML(doc, TODOS_XML_FILE);
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
+            writeXML(doc, TODOS_XML);
+        } catch (Exception e) { e.printStackTrace(); }
+    }
+
+    // ── XML 工具 ──────────────────────────────────────────────────────────
+    private String getText(Element el, String tag, String defaultVal) {
+        NodeList nl = el.getElementsByTagName(tag);
+        if (nl.getLength() == 0) return defaultVal;
+        String v = nl.item(0).getTextContent();
+        return v != null ? v : defaultVal;
+    }
+
+    private int parseInt(Element el, String tag, int defaultVal) {
+        try { return Integer.parseInt(getText(el, tag, String.valueOf(defaultVal))); }
+        catch (NumberFormatException e) { return defaultVal; }
     }
 
     private void appendText(Document doc, Element parent, String tag, String value) {
