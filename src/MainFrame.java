@@ -13,14 +13,16 @@ public class MainFrame extends JFrame {
     private final CardLayout cardLayout;
     private NavItem          activeNav;
 
-    private final CalendarPanel calendarPanel;
-    private final TodoPanel     todoPanel;
+    private final CalendarPanel   calendarPanel;
+    private final TodoPanel       todoPanel;
+    private final SchoolNewsPanel newsPanel;
 
     public MainFrame(List<Task> tasks, List<TodoItem> todos,
                      Runnable saveTasksCallback, Runnable saveTodosCallback) {
 
         calendarPanel = new CalendarPanel(tasks);
         todoPanel     = new TodoPanel(todos, saveTodosCallback);
+        newsPanel     = new SchoolNewsPanel();
 
         setTitle("學生行程與任務管理系統");
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
@@ -50,6 +52,7 @@ public class MainFrame extends JFrame {
         contentArea.setBackground(AppColors.BG_SECONDARY);
         contentArea.add(calendarPanel, "calendar");
         contentArea.add(todoPanel,     "todo");
+        contentArea.add(newsPanel,     "news");
         body.add(contentArea, BorderLayout.CENTER);
 
         root.add(body, BorderLayout.CENTER);
@@ -130,17 +133,19 @@ public class MainFrame extends JFrame {
 
         NavItem calNav  = new NavItem("任務行事曆");
         NavItem todoNav = new NavItem("代辦事項");
+        NavItem newsNav = new NavItem("學校公告");
 
         calNav.addActionListener(e  -> switchTo("calendar", calNav));
         todoNav.addActionListener(e -> switchTo("todo",     todoNav));
+        newsNav.addActionListener(e -> switchTo("news",     newsNav));
 
         sb.add(calNav);
         sb.add(todoNav);
+        sb.add(newsNav);
 
         sb.add(Box.createRigidArea(new Dimension(0, 12)));
         sb.add(sectionLabel("即將推出"));
         sb.add(disabledItem("課程課表"));
-        sb.add(disabledItem("學校公告"));
 
         sb.add(Box.createVerticalGlue());
 
@@ -150,7 +155,7 @@ public class MainFrame extends JFrame {
         sb.add(sep);
         sb.add(Box.createRigidArea(new Dimension(0, 8)));
 
-        JLabel ver = new JLabel("  v0.2  早期預覽版");
+        JLabel ver = new JLabel("  v0.3  早期預覽版");
         ver.setFont(AppFonts.CAPTION);
         ver.setForeground(AppColors.TEXT_TERTIARY);
         ver.setAlignmentX(Component.LEFT_ALIGNMENT);
