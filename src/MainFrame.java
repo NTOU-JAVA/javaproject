@@ -67,18 +67,22 @@ public class MainFrame extends JFrame {
         left.setOpaque(false);
         left.setBorder(new EmptyBorder(0, 18, 0, 0));
 
-        // 圖標：書本符號，圓角背景
-        JLabel logoBox = new JLabel("📚", SwingConstants.CENTER) {
+        // 圖標：書本符號，圓角背景 — 改為淺藍底色 + 深藍文字
+        JLabel logoBox = new JLabel("S", SwingConstants.CENTER) {
             @Override protected void paintComponent(Graphics g) {
                 Graphics2D g2 = (Graphics2D) g.create();
                 g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-                g2.setColor(AppColors.ACCENT);
+                g2.setColor(AppColors.ACCENT_LIGHT);          // 淺藍背景
                 g2.fillRoundRect(0, 0, getWidth(), getHeight(), 8, 8);
+                // 淺藍底上畫一圈淡邊框
+                g2.setColor(new Color(0xC5D0FA));
+                g2.drawRoundRect(0, 0, getWidth()-1, getHeight()-1, 8, 8);
                 g2.dispose();
                 super.paintComponent(g);
             }
         };
-        logoBox.setFont(new Font("Serif", Font.PLAIN, 18));
+        logoBox.setFont(AppFonts.TITLE_SMALL);
+        logoBox.setForeground(AppColors.ACCENT);              // 深藍文字
         logoBox.setOpaque(false);
         logoBox.setPreferredSize(new Dimension(36, 36));
 
@@ -98,7 +102,7 @@ public class MainFrame extends JFrame {
         hint.setFont(AppFonts.CAPTION);
         hint.setForeground(AppColors.TEXT_TERTIARY);
 
-        JLabel avatar = new JLabel("？", SwingConstants.CENTER);
+        JLabel avatar = new JLabel("?", SwingConstants.CENTER);
         avatar.setFont(AppFonts.BODY_SMALL);
         avatar.setForeground(AppColors.ACCENT_TEXT);
         avatar.setBackground(AppColors.ACCENT_LIGHT);
@@ -124,8 +128,8 @@ public class MainFrame extends JFrame {
         sb.add(Box.createRigidArea(new Dimension(0, 16)));
         sb.add(sectionLabel("主要功能"));
 
-        NavItem calNav  = new NavItem("任務行事曆", "📅");
-        NavItem todoNav = new NavItem("代辦事項",   "✓");
+        NavItem calNav  = new NavItem("任務行事曆");
+        NavItem todoNav = new NavItem("代辦事項");
 
         calNav.addActionListener(e  -> switchTo("calendar", calNav));
         todoNav.addActionListener(e -> switchTo("todo",     todoNav));
@@ -135,8 +139,8 @@ public class MainFrame extends JFrame {
 
         sb.add(Box.createRigidArea(new Dimension(0, 12)));
         sb.add(sectionLabel("即將推出"));
-        sb.add(disabledItem("課程課表", "▦"));
-        sb.add(disabledItem("學校公告", "◎"));
+        sb.add(disabledItem("課程課表"));
+        sb.add(disabledItem("學校公告"));
 
         sb.add(Box.createVerticalGlue());
 
@@ -169,16 +173,12 @@ public class MainFrame extends JFrame {
         return l;
     }
 
-    private JPanel disabledItem(String label, String icon) {
+    private JPanel disabledItem(String label) {
         JPanel p = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 7));
         p.setOpaque(false);
         p.setMaximumSize(new Dimension(Integer.MAX_VALUE, 36));
         p.setAlignmentX(Component.LEFT_ALIGNMENT);
         p.setBorder(new EmptyBorder(0, 8, 0, 0));
-
-        JLabel ic = new JLabel(icon);
-        ic.setFont(AppFonts.BODY_MEDIUM);
-        ic.setForeground(AppColors.TEXT_TERTIARY);
 
         JLabel nm = new JLabel(label);
         nm.setFont(AppFonts.NAV);
@@ -191,7 +191,7 @@ public class MainFrame extends JFrame {
         badge.setOpaque(true);
         badge.setBorder(new EmptyBorder(1, 5, 1, 5));
 
-        p.add(ic); p.add(nm); p.add(badge);
+        p.add(nm); p.add(badge);
         return p;
     }
 
@@ -209,7 +209,7 @@ public class MainFrame extends JFrame {
         private final java.util.List<ActionListener> listeners = new java.util.ArrayList<>();
         private final JLabel nameLabel;
 
-        NavItem(String label, String icon) {
+        NavItem(String label) {
             setLayout(new FlowLayout(FlowLayout.LEFT, 8, 7));
             setOpaque(false);
             setMaximumSize(new Dimension(Integer.MAX_VALUE, 36));
@@ -217,15 +217,10 @@ public class MainFrame extends JFrame {
             setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
             setBorder(new EmptyBorder(0, 8, 0, 8));
 
-            JLabel ic = new JLabel(icon);
-            ic.setFont(AppFonts.BODY_MEDIUM);
-            ic.setForeground(AppColors.TEXT_SECONDARY);
-
             nameLabel = new JLabel(label);
             nameLabel.setFont(AppFonts.NAV);
             nameLabel.setForeground(AppColors.TEXT_SECONDARY);
 
-            add(ic);
             add(nameLabel);
 
             addMouseListener(new MouseAdapter() {

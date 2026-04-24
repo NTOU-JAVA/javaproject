@@ -26,9 +26,9 @@ public class TodoPanel extends JPanel {
     private final JList<TodoItem>            todoList  = new JList<>(listModel);
 
     // 右側操作按鈕
-    private final JButton editButton   = makeBtn("✎  編輯");
-    private final JButton deleteButton = makeBtn("✕  刪除");
-    private final JButton doneButton   = makeBtn("✔  標記完成");
+    private final JButton editButton   = makeBtn("編輯");
+    private final JButton deleteButton = makeBtn("刪除");
+    private final JButton doneButton   = makeBtn("標記完成");
 
     private boolean updatingList = false;
 
@@ -104,7 +104,7 @@ public class TodoPanel extends JPanel {
         return area;
     }
 
-    // ── 右側操作面板（與 CalendarPanel 相同結構） ────────────────────────────
+    // ── 右側操作面板 ────────────────────────────────────────────────────────
     private JPanel buildSidePanel() {
         JPanel side = new JPanel();
         side.setLayout(new BoxLayout(side, BoxLayout.Y_AXIS));
@@ -175,40 +175,52 @@ public class TodoPanel extends JPanel {
         doneButton.setEnabled(has);
         if (has && todoList.getSelectedValue() != null) {
             doneButton.setText(todoList.getSelectedValue().isCompleted()
-                    ? "↩  取消完成" : "✔  標記完成");
+                    ? "取消完成" : "標記完成");
         } else {
-            doneButton.setText("✔  標記完成");
+            doneButton.setText("標記完成");
         }
     }
 
-    // ── 新增/編輯 Dialog ─────────────────────────────────────────────────────
+    // ── 新增/編輯 Dialog（改用 JDialog，修正內容被截掉的問題） ──────────────
     private void showTodoDialog(TodoItem editItem) {
         boolean isEdit = (editItem != null);
 
+        // ── 取得父視窗 ──
+        Window owner = SwingUtilities.getWindowAncestor(this);
+        JDialog dlg = new JDialog(owner,
+                isEdit ? "編輯代辦" : "新增代辦",
+                Dialog.ModalityType.APPLICATION_MODAL);
+        dlg.setLayout(new BorderLayout());
+        dlg.setResizable(false);
+
+        // ── 欄位 ──
         JTextField titleField = new JTextField(isEdit ? editItem.getTitle() : "", 22);
-        JTextArea  descArea   = new JTextArea(isEdit ? editItem.getDescription() : "", 3, 22);
+        titleField.setFont(AppFonts.BODY_MEDIUM);
+
+        JTextArea descArea = new JTextArea(isEdit ? editItem.getDescription() : "", 3, 22);
+        descArea.setFont(AppFonts.BODY_SMALL);
         descArea.setLineWrap(true);
         descArea.setWrapStyleWord(true);
-        descArea.setBorder(BorderFactory.createLineBorder(new Color(0xCCCBCA)));
         JScrollPane descScroll = new JScrollPane(descArea);
-        descScroll.setPreferredSize(new Dimension(280, 60));
+        descScroll.setPreferredSize(new Dimension(280, 62));
 
-        JCheckBox completedCheck = new JCheckBox("✔ 已完成", isEdit && editItem.isCompleted());
-
-        // Deadline（提醒時間）可選
+        // ── Deadline（提醒時間）可選 ──
         LocalDateTime base = LocalDateTime.now();
         if (isEdit && editItem.getReminderTime() != null) {
             try { base = LocalDateTime.parse(editItem.getReminderTime(), REMINDER_FMT); }
             catch (DateTimeParseException ignored) {}
         }
-        JCheckBox deadlineCheck = new JCheckBox("設定截止提醒時間",
-                isEdit && editItem.getReminderTime() != null);
 
-        JSpinner yearSp  = new JSpinner(new SpinnerNumberModel(base.getYear(), 2020, 2099, 1));
-        JSpinner monthSp = new JSpinner(new SpinnerNumberModel(base.getMonthValue(), 1, 12, 1));
-        JSpinner daySp   = new JSpinner(new SpinnerNumberModel(base.getDayOfMonth(), 1, 31, 1));
-        JSpinner hourSp  = new JSpinner(new SpinnerNumberModel(base.getHour(), 0, 23, 1));
-        JSpinner minSp   = new JSpinner(new SpinnerNumberModel(base.getMinute(), 0, 59, 1));
+        boolean initHasDeadline = isEdit && editItem.getReminderTime() != null;
+        JCheckBox deadlineCheck = new JCheckBox("設定截止提醒時間", initHasDeadline);
+        deadlineCheck.setFont(AppFonts.BODY_SMALL);
+
+        JSpinner yearSp  = new JSpinner(new SpinnerNumberModel(base.getYear(),         2020, 2099, 1));
+        JSpinner monthSp = new JSpinner(new SpinnerNumberModel(base.getMonthValue(),   1,    12,   1));
+        JSpinner daySp   = new JSpinner(new SpinnerNumberModel(base.getDayOfMonth(),   1,    31,   1));
+        JSpinner hourSp  = new JSpinner(new SpinnerNumberModel(base.getHour(),         0,    23,   1));
+        JSpinner minSp   = new JSpinner(new SpinnerNumberModel(base.getMinute(),       0,    59,   1));
+
         for (JSpinner s : new JSpinner[]{monthSp, daySp, hourSp, minSp})
             s.setEditor(new JSpinner.NumberEditor(s, "00"));
         yearSp .setPreferredSize(new Dimension(68, 26));
@@ -217,87 +229,134 @@ public class TodoPanel extends JPanel {
         hourSp .setPreferredSize(new Dimension(48, 26));
         minSp  .setPreferredSize(new Dimension(48, 26));
 
-        JPanel dtPanel = new JPanel();
-        dtPanel.setLayout(new BoxLayout(dtPanel, BoxLayout.Y_AXIS));
         JPanel dateRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 3, 0));
+        dateRow.setOpaque(false);
         dateRow.add(new JLabel("日期 "));
-        dateRow.add(yearSp); dateRow.add(new JLabel("/"));
+        dateRow.add(yearSp);  dateRow.add(new JLabel("/"));
         dateRow.add(monthSp); dateRow.add(new JLabel("/")); dateRow.add(daySp);
+
         JPanel timeRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 3, 0));
+        timeRow.setOpaque(false);
         timeRow.add(new JLabel("時間 "));
         timeRow.add(hourSp); timeRow.add(new JLabel(":")); timeRow.add(minSp);
+
+        JPanel dtPanel = new JPanel();
+        dtPanel.setLayout(new BoxLayout(dtPanel, BoxLayout.Y_AXIS));
+        dtPanel.setOpaque(false);
         dtPanel.add(dateRow);
         dtPanel.add(Box.createRigidArea(new Dimension(0, 4)));
         dtPanel.add(timeRow);
-        dtPanel.setVisible(deadlineCheck.isSelected());
-        deadlineCheck.addActionListener(e -> dtPanel.setVisible(deadlineCheck.isSelected()));
+        dtPanel.setVisible(initHasDeadline);
 
-        // 組合 Dialog 面板
-        JPanel panel = new JPanel(new GridBagLayout());
-        panel.setPreferredSize(new Dimension(340, 0));
-        GridBagConstraints gc = new GridBagConstraints();
-        gc.insets = new Insets(5, 6, 5, 6);
-        gc.anchor = GridBagConstraints.WEST;
-        gc.fill   = GridBagConstraints.HORIZONTAL;
-        gc.weightx = 1;
+        // 勾選截止時間時重新 pack，確保視窗大小正確展開
+        deadlineCheck.addActionListener(e -> {
+            dtPanel.setVisible(deadlineCheck.isSelected());
+            dlg.pack();
+        });
 
-        gc.gridx=0; gc.gridy=0; gc.fill=GridBagConstraints.NONE;
-        panel.add(new JLabel("標題 *"), gc);
-        gc.gridx=1; gc.fill=GridBagConstraints.HORIZONTAL;
-        panel.add(titleField, gc);
+        // ── 組合內容面板 ──
+        JPanel content = new JPanel();
+        content.setLayout(new BoxLayout(content, BoxLayout.Y_AXIS));
+        content.setBorder(new EmptyBorder(16, 20, 8, 20));
 
-        gc.gridx=0; gc.gridy=1; gc.fill=GridBagConstraints.NONE;
-        panel.add(new JLabel("說明"), gc);
-        gc.gridx=1; gc.fill=GridBagConstraints.HORIZONTAL;
-        panel.add(descScroll, gc);
+        content.add(fieldRow("標題", titleField));
+        content.add(Box.createRigidArea(new Dimension(0, 10)));
+        content.add(fieldRow("說明", descScroll));
+        content.add(Box.createRigidArea(new Dimension(0, 12)));
+        content.add(leftAlign(deadlineCheck));
+        content.add(Box.createRigidArea(new Dimension(0, 4)));
+        content.add(leftAlign(dtPanel));
 
-        gc.gridx=0; gc.gridy=2; gc.gridwidth=2;
-        panel.add(deadlineCheck, gc);
+        // ── 底部按鈕列 ──
+        JButton okBtn     = new JButton(isEdit ? "儲存" : "新增");
+        JButton cancelBtn = new JButton("取消");
+        okBtn.setFont(AppFonts.BODY_SMALL);
+        cancelBtn.setFont(AppFonts.BODY_SMALL);
+        okBtn.setBackground(AppColors.ACCENT);
+        okBtn.setForeground(Color.WHITE);
+        okBtn.setFocusPainted(false);
+        okBtn.setBorder(new EmptyBorder(6, 20, 6, 20));
+        cancelBtn.setBorder(new EmptyBorder(6, 16, 6, 16));
+        cancelBtn.setFocusPainted(false);
 
-        gc.gridx=0; gc.gridy=3; gc.gridwidth=2;
-        panel.add(dtPanel, gc);
+        JPanel btnRow = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 10));
+        btnRow.setBorder(new MatteBorder(1, 0, 0, 0, AppColors.BORDER_DEFAULT));
+        btnRow.add(cancelBtn);
+        btnRow.add(okBtn);
 
-        gc.gridx=0; gc.gridy=4; gc.gridwidth=2;
-        panel.add(completedCheck, gc);
+        dlg.add(content, BorderLayout.CENTER);
+        dlg.add(btnRow,  BorderLayout.SOUTH);
+        dlg.pack();
+        dlg.setLocationRelativeTo(this);
 
-        int result = JOptionPane.showConfirmDialog(
-                this, panel, isEdit ? "編輯代辦" : "新增代辦",
-                JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
-        if (result != JOptionPane.OK_OPTION) return;
+        // ── 取消 ──
+        cancelBtn.addActionListener(e -> dlg.dispose());
+        dlg.getRootPane().setDefaultButton(okBtn);
 
-        String titleVal = titleField.getText().trim();
-        if (titleVal.isEmpty()) {
-            JOptionPane.showMessageDialog(this, "標題不可為空。","輸入錯誤",JOptionPane.WARNING_MESSAGE);
-            return;
-        }
-
-        String reminder = null;
-        if (deadlineCheck.isSelected()) {
-            int y=(int)yearSp.getValue(), mo=(int)monthSp.getValue(),
-                d=(int)daySp.getValue(), h=(int)hourSp.getValue(), mi=(int)minSp.getValue();
-            try { LocalDateTime.of(y, mo, d, h, mi); }
-            catch (Exception ex) {
-                JOptionPane.showMessageDialog(this,"日期不合法。","日期錯誤",JOptionPane.WARNING_MESSAGE);
+        // ── 確認儲存 ──
+        okBtn.addActionListener(e -> {
+            String titleVal = titleField.getText().trim();
+            if (titleVal.isEmpty()) {
+                JOptionPane.showMessageDialog(dlg, "標題不可為空。",
+                        "輸入錯誤", JOptionPane.WARNING_MESSAGE);
                 return;
             }
-            reminder = String.format("%04d-%02d-%02d %02d:%02d", y, mo, d, h, mi);
-        }
 
-        if (isEdit) {
-            editItem.setTitle(titleVal);
-            editItem.setDescription(descArea.getText().trim());
-            editItem.setReminderTime(reminder);
-            editItem.setCompleted(completedCheck.isSelected());
-            remindedIds.remove(editItem.getId());
-        } else {
-            int nextId = todos.isEmpty() ? 1
-                    : todos.stream().mapToInt(TodoItem::getId).max().orElse(0) + 1;
-            TodoItem item = new TodoItem(nextId, titleVal, descArea.getText().trim(), reminder);
-            item.setCompleted(completedCheck.isSelected());
-            todos.add(item);
-        }
-        refreshList();
-        saveCallback.run();
+            String reminder = null;
+            if (deadlineCheck.isSelected()) {
+                int y  = (int) yearSp.getValue(),  mo = (int) monthSp.getValue(),
+                    d  = (int) daySp.getValue(),   h  = (int) hourSp.getValue(),
+                    mi = (int) minSp.getValue();
+                try { LocalDateTime.of(y, mo, d, h, mi); }
+                catch (Exception ex) {
+                    JOptionPane.showMessageDialog(dlg, "日期不合法。",
+                            "日期錯誤", JOptionPane.WARNING_MESSAGE);
+                    return;
+                }
+                reminder = String.format("%04d-%02d-%02d %02d:%02d", y, mo, d, h, mi);
+            }
+
+            if (isEdit) {
+                editItem.setTitle(titleVal);
+                editItem.setDescription(descArea.getText().trim());
+                editItem.setReminderTime(reminder);
+                remindedIds.remove(editItem.getId());
+            } else {
+                int nextId = todos.isEmpty() ? 1
+                        : todos.stream().mapToInt(TodoItem::getId).max().orElse(0) + 1;
+                TodoItem item = new TodoItem(nextId, titleVal,
+                        descArea.getText().trim(), reminder);
+                todos.add(item);
+            }
+
+            dlg.dispose();
+            refreshList();
+            saveCallback.run();
+        });
+
+        dlg.setVisible(true);
+    }
+
+    /** 標籤 + 元件水平排列的一列 */
+    private JPanel fieldRow(String labelText, JComponent comp) {
+        JPanel row = new JPanel(new BorderLayout(8, 0));
+        row.setOpaque(false);
+        row.setMaximumSize(new Dimension(Integer.MAX_VALUE, Integer.MAX_VALUE));
+        JLabel lbl = new JLabel(labelText);
+        lbl.setFont(AppFonts.BODY_SMALL);
+        lbl.setForeground(AppColors.TEXT_SECONDARY);
+        lbl.setPreferredSize(new Dimension(36, 0));
+        row.add(lbl,  BorderLayout.WEST);
+        row.add(comp, BorderLayout.CENTER);
+        return row;
+    }
+
+    private JPanel leftAlign(JComponent comp) {
+        JPanel p = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
+        p.setOpaque(false);
+        p.setMaximumSize(new Dimension(Integer.MAX_VALUE, Integer.MAX_VALUE));
+        p.add(comp);
+        return p;
     }
 
     private void toggleDone() {
@@ -313,7 +372,8 @@ public class TodoPanel extends JPanel {
         TodoItem sel = todoList.getSelectedValue();
         if (sel == null) return;
         int confirm = JOptionPane.showConfirmDialog(this,
-                "確定要刪除「" + sel.getTitle() + "」？", "確認刪除", JOptionPane.YES_NO_OPTION);
+                "確定要刪除「" + sel.getTitle() + "」？", "確認刪除",
+                JOptionPane.YES_NO_OPTION);
         if (confirm != JOptionPane.YES_OPTION) return;
         remindedIds.remove(sel.getId());
         todos.remove(sel);
@@ -325,7 +385,6 @@ public class TodoPanel extends JPanel {
     public void refreshList() {
         updatingList = true;
         try {
-            // 排序：未完成 → 有 deadline 的依時間 → 無 deadline → 已完成
             todos.sort((a, b) -> {
                 if (a.isCompleted() != b.isCompleted())
                     return a.isCompleted() ? 1 : -1;
@@ -431,24 +490,18 @@ public class TodoPanel extends JPanel {
             }
             titleLabel.setFont(AppFonts.BODY_SMALL);
 
-            // 截止時間標籤
             String rt = t.getReminderTime();
             if (rt != null && !t.isCompleted()) {
-                // 快到期變紅
                 try {
                     LocalDateTime target = LocalDateTime.parse(rt, REMINDER_FMT);
                     long mins = java.time.Duration.between(LocalDateTime.now(), target).toMinutes();
-                    if (mins >= 0 && mins <= 1440) {
-                        timeLabel.setForeground(AppColors.DANGER);
-                    } else if (mins < 0) {
-                        timeLabel.setForeground(AppColors.TEXT_TERTIARY);
-                    } else {
-                        timeLabel.setForeground(AppColors.TEXT_TERTIARY);
-                    }
+                    timeLabel.setForeground(
+                            (mins >= 0 && mins <= 1440) ? AppColors.DANGER
+                                                        : AppColors.TEXT_TERTIARY);
                 } catch (Exception e) {
                     timeLabel.setForeground(AppColors.TEXT_TERTIARY);
                 }
-                timeLabel.setText(rt.substring(5)); // 顯示 MM-dd HH:mm
+                timeLabel.setText(rt.substring(5));
             } else {
                 timeLabel.setText("");
             }
