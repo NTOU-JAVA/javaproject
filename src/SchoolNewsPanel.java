@@ -2,7 +2,6 @@ import javax.swing.*;
 import javax.swing.border.*;
 import java.awt.*;
 import java.awt.event.*;
-import java.awt.Desktop;
 import java.net.URI;
 import java.util.List;
 
@@ -177,9 +176,12 @@ public class SchoolNewsPanel extends JPanel {
     // ── 判斷新聞是否應該顯示 ───────────────────────────────────────────────
     private boolean isNewsIncluded(String title) {
         return title.contains("校園行事曆") ||
-               title.contains("大學程式檢定") ||
+               title.contains("大學程式能力檢定CPE") ||
                title.contains("1142學期資工系新生電腦選課") ||
-               title.contains("2026海洋盃程式競賽");
+               title.contains("2026海洋盃程式競賽") ||
+               title.contains("資工系館WIFI使用說明") ||
+               title.contains("校內報修系統") ||
+               title.contains("海大學術庫");
     }
 
     // ── 事件處理 ──────────────────────────────────────────────────────────────
