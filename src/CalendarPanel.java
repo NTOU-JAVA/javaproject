@@ -28,9 +28,6 @@ public class CalendarPanel extends JPanel {
     private final javax.swing.Timer reminderTimer;
     private final Set<Integer>      remindedIds = new HashSet<>();
 
-    private final JButton editButton   = sideButton("編輯任務");
-    private final JButton deleteButton = sideButton("刪除任務");
-
     // ── Popover ──
     private TaskPopover currentPopover = null;
 
@@ -44,9 +41,9 @@ public class CalendarPanel extends JPanel {
         setLayout(new BorderLayout(0, 0));
         setBackground(AppColors.BG_SECONDARY);
 
-        add(buildTopNav(),    BorderLayout.NORTH);
-        add(buildGrid(),      BorderLayout.CENTER);
-        add(buildSidePanel(), BorderLayout.EAST);
+        add(buildTopNav(), BorderLayout.NORTH);
+        add(buildGrid(),   BorderLayout.CENTER);
+        add(buildHintBar(), BorderLayout.SOUTH);
 
         updateCalendar();
 
@@ -112,6 +109,18 @@ public class CalendarPanel extends JPanel {
         return b;
     }
 
+    // ── 底部提示列 ────────────────────────────────────────────────────────────
+    private JPanel buildHintBar() {
+        JPanel bar = new JPanel(new FlowLayout(FlowLayout.RIGHT, 16, 6));
+        bar.setBackground(AppColors.BG_SECONDARY);
+        bar.setBorder(new MatteBorder(1, 0, 0, 0, AppColors.BORDER_DEFAULT));
+        JLabel hint = new JLabel("點擊任務查看詳情・編輯・刪除　|　點空白處新增任務");
+        hint.setFont(AppFonts.CAPTION);
+        hint.setForeground(AppColors.TEXT_TERTIARY);
+        bar.add(hint);
+        return bar;
+    }
+
     // ── 七天格子 ──────────────────────────────────────────────────────────────
     private JPanel buildGrid() {
         JPanel grid = new JPanel(new GridLayout(1, 7, 1, 0));
@@ -149,7 +158,6 @@ public class CalendarPanel extends JPanel {
                         selectedTask = null;
                         selectedDayIndex = -1;
                     }
-                    refreshSideButtons();
                 }
             });
 
@@ -157,7 +165,6 @@ public class CalendarPanel extends JPanel {
                 @Override public void mouseClicked(MouseEvent e) {
                     int ci = list.locationToIndex(e.getPoint());
                     if (ci >= 0) {
-                        // 點到任務（不論是否已選取）都顯示 popover
                         Task clicked = ((DefaultListModel<Task>) list.getModel()).getElementAt(ci);
                         selectedTask = clicked;
                         selectedDayIndex = idx;
@@ -165,12 +172,9 @@ public class CalendarPanel extends JPanel {
                         for (int j = 0; j < dayTaskLists.size(); j++)
                             if (j != idx) dayTaskLists.get(j).clearSelection();
                         showPopover(clicked, list);
-                        refreshSideButtons();
                     } else {
-                        // 點空白處：關閉 popover、新增任務
                         closePopover();
                         selectedTask = null;
-                        refreshSideButtons();
                         openTaskDialog(null, weekStart.plusDays(idx));
                     }
                 }
@@ -191,15 +195,12 @@ public class CalendarPanel extends JPanel {
     private void showPopover(Task task, JList<Task> sourceList) {
         closePopover();
 
-        // 找到 layeredPane 來承載 popover（覆蓋在最上層）
         JRootPane root = SwingUtilities.getRootPane(this);
         if (root == null) return;
         JLayeredPane layered = root.getLayeredPane();
 
         currentPopover = new TaskPopover(task,
-            // 編輯回呼
             () -> { closePopover(); openTaskDialog(task, null); },
-            // 刪除回呼
             () -> {
                 int confirm = JOptionPane.showConfirmDialog(CalendarPanel.this,
                         "確定要刪除「" + task.getTitle() + "」？",
@@ -209,26 +210,21 @@ public class CalendarPanel extends JPanel {
                     tasks.remove(task);
                     selectedTask = null;
                     closePopover();
-                    refreshSideButtons();
                     updateCalendar();
                 }
             },
-            // 關閉回呼
             this::closePopover
         );
 
-        // 計算 popover 位置：在被點任務格子的右側，緊貼
         Point listLocInLayered = SwingUtilities.convertPoint(sourceList, 0, 0, layered);
         int popW = 280;
         int popH = currentPopover.getPreferredSize().height;
         int x    = listLocInLayered.x + sourceList.getWidth() + 4;
         int y    = listLocInLayered.y + 20;
 
-        // 若右側超出視窗，改放左側
         if (x + popW > layered.getWidth()) {
             x = listLocInLayered.x - popW - 4;
         }
-        // 垂直防溢出
         if (y + popH > layered.getHeight()) {
             y = Math.max(0, layered.getHeight() - popH - 8);
         }
@@ -239,7 +235,6 @@ public class CalendarPanel extends JPanel {
         layered.revalidate();
         layered.repaint();
 
-        // 點 popover 以外任意地方關閉
         AWTEventListener closer = new AWTEventListener() {
             @Override public void eventDispatched(AWTEvent event) {
                 if (event instanceof MouseEvent) {
@@ -259,8 +254,7 @@ public class CalendarPanel extends JPanel {
                 }
             }
         };
-        Toolkit.getDefaultToolkit().addAWTEventListener(closer,
-                AWTEvent.MOUSE_EVENT_MASK);
+        Toolkit.getDefaultToolkit().addAWTEventListener(closer, AWTEvent.MOUSE_EVENT_MASK);
     }
 
     private void closePopover() {
@@ -282,10 +276,8 @@ public class CalendarPanel extends JPanel {
                 new LineBorder(AppColors.BORDER_DEFAULT, 1, true),
                 new EmptyBorder(0, 0, 0, 0)
             ));
-            // 投影效果用外層面板模擬（簡單 drop shadow）
             setOpaque(true);
 
-            // ── 頂部色條 + 標題列 ──
             JPanel header = new JPanel(new BorderLayout());
             header.setBackground(task.isImportant() ? AppColors.DANGER_LIGHT : AppColors.ACCENT_LIGHT);
             header.setBorder(new EmptyBorder(10, 14, 10, 10));
@@ -306,13 +298,11 @@ public class CalendarPanel extends JPanel {
             header.add(titleLbl, BorderLayout.CENTER);
             header.add(closeBtn, BorderLayout.EAST);
 
-            // ── 主體內容 ──
             JPanel body = new JPanel();
             body.setLayout(new BoxLayout(body, BoxLayout.Y_AXIS));
             body.setBackground(Color.WHITE);
             body.setBorder(new EmptyBorder(12, 14, 8, 14));
 
-            // 重要標記
             if (task.isImportant()) {
                 JLabel imp = new JLabel("[ ! ] 重要任務");
                 imp.setFont(AppFonts.CAPTION);
@@ -322,7 +312,6 @@ public class CalendarPanel extends JPanel {
                 body.add(Box.createRigidArea(new Dimension(0, 6)));
             }
 
-            // 截止時間
             if (task.hasDeadline() && !task.getDate().isEmpty()) {
                 String timeStr = task.getTime().isEmpty()
                         ? task.getDate()
@@ -338,7 +327,6 @@ public class CalendarPanel extends JPanel {
                 body.add(Box.createRigidArea(new Dimension(0, 6)));
             }
 
-            // 說明
             String desc = task.getDescription();
             if (desc != null && !desc.isEmpty()) {
                 JLabel descHead = rowLabel("[說明]");
@@ -361,7 +349,6 @@ public class CalendarPanel extends JPanel {
                 body.add(Box.createRigidArea(new Dimension(0, 8)));
             }
 
-            // 完成狀態
             if (task.isCompleted()) {
                 JLabel done = rowLabel("[v] 已完成");
                 done.setForeground(AppColors.SUCCESS);
@@ -369,7 +356,6 @@ public class CalendarPanel extends JPanel {
                 body.add(Box.createRigidArea(new Dimension(0, 6)));
             }
 
-            // ── 底部按鈕列 ──
             JPanel btnRow = new JPanel(new FlowLayout(FlowLayout.RIGHT, 6, 8));
             btnRow.setBackground(new Color(0xFAF9F7));
             btnRow.setBorder(new MatteBorder(1, 0, 0, 0, AppColors.BORDER_DEFAULT));
@@ -412,7 +398,6 @@ public class CalendarPanel extends JPanel {
 
         @Override
         protected void paintComponent(Graphics g) {
-            // 畫輕微 drop shadow
             Graphics2D g2 = (Graphics2D) g.create();
             g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
             g2.setColor(new Color(0, 0, 0, 18));
@@ -420,72 +405,6 @@ public class CalendarPanel extends JPanel {
             g2.dispose();
             super.paintComponent(g);
         }
-    }
-
-    // ── 右側操作面板 ──────────────────────────────────────────────────────────
-    private JPanel buildSidePanel() {
-        JPanel side = new JPanel();
-        side.setLayout(new BoxLayout(side, BoxLayout.Y_AXIS));
-        side.setBackground(AppColors.SIDEBAR_BG);
-        side.setPreferredSize(new Dimension(148, 0));
-        side.setBorder(new MatteBorder(0, 1, 0, 0, AppColors.BORDER_DEFAULT));
-
-        side.add(Box.createRigidArea(new Dimension(0, 56)));
-        side.add(sideSectionLabel("任務操作"));
-        side.add(Box.createRigidArea(new Dimension(0, 8)));
-
-        styleSideButton(editButton);
-        styleSideButton(deleteButton);
-
-        editButton.addActionListener(e -> {
-            if (selectedTask != null) { closePopover(); openTaskDialog(selectedTask, null); }
-        });
-        deleteButton.addActionListener(e -> deleteSelectedTask());
-
-        side.add(wrapSideBtn(editButton));
-        side.add(Box.createRigidArea(new Dimension(0, 6)));
-        side.add(wrapSideBtn(deleteButton));
-
-        side.add(Box.createRigidArea(new Dimension(0, 20)));
-        side.add(sideSectionLabel("提示"));
-        side.add(Box.createRigidArea(new Dimension(0, 4)));
-
-        JLabel hint = new JLabel("<html><div style='width:110px;color:#A8A7A4;"
-                + "font-size:10px;line-height:1.6'>"
-                + "點擊任務查看詳情<br>點空白處新增</div></html>");
-        hint.setBorder(new EmptyBorder(0, 12, 0, 4));
-        hint.setAlignmentX(Component.LEFT_ALIGNMENT);
-        side.add(hint);
-        side.add(Box.createVerticalGlue());
-
-        refreshSideButtons();
-        return side;
-    }
-
-    private void refreshSideButtons() {
-        boolean has = selectedTask != null;
-        editButton.setEnabled(has);
-        deleteButton.setEnabled(has);
-    }
-
-    private JPanel wrapSideBtn(JButton btn) {
-        JPanel p = new JPanel(new BorderLayout());
-        p.setOpaque(false);
-        p.setBorder(new EmptyBorder(0, 8, 0, 8));
-        p.add(btn);
-        p.setMaximumSize(new Dimension(Integer.MAX_VALUE, 34));
-        p.setAlignmentX(Component.LEFT_ALIGNMENT);
-        return p;
-    }
-
-    private JLabel sideSectionLabel(String text) {
-        JLabel l = new JLabel(text.toUpperCase());
-        l.setFont(AppFonts.LABEL);
-        l.setForeground(AppColors.TEXT_TERTIARY);
-        l.setBorder(new EmptyBorder(0, 12, 0, 0));
-        l.setAlignmentX(Component.LEFT_ALIGNMENT);
-        l.setMaximumSize(new Dimension(Integer.MAX_VALUE, 20));
-        return l;
     }
 
     // ── 新增 / 編輯 Dialog ────────────────────────────────────────────────────
@@ -516,16 +435,12 @@ public class CalendarPanel extends JPanel {
                 isEdit && editTask.isImportant());
         importantCheck.setFont(AppFonts.BODY_SMALL);
 
-        boolean initHasDeadline = isEdit ? editTask.hasDeadline() : true;
         int initH = 9, initM = 0;
-        if (isEdit && editTask.hasDeadline() && !editTask.getTime().isEmpty()) {
+        if (isEdit && !editTask.getTime().isEmpty()) {
             String[] tp = editTask.getTime().split(":");
             try { initH = Integer.parseInt(tp[0]); initM = Integer.parseInt(tp[1]); }
             catch (NumberFormatException ignored) {}
         }
-
-        JCheckBox deadlineCheck = new JCheckBox("設定截止日期與時間", initHasDeadline);
-        deadlineCheck.setFont(AppFonts.BODY_SMALL);
 
         JSpinner yearSp  = makeSpinner(initDate.getYear(),       2020, 2099, 1);
         JSpinner monthSp = makeSpinner(initDate.getMonthValue(), 1,    12,   1);
@@ -539,6 +454,10 @@ public class CalendarPanel extends JPanel {
         daySp  .setPreferredSize(new Dimension(50, 26));
         hourSp .setPreferredSize(new Dimension(50, 26));
         minSp  .setPreferredSize(new Dimension(50, 26));
+
+        JLabel deadlineLabel = new JLabel("截止日期與時間");
+        deadlineLabel.setFont(AppFonts.BODY_SMALL);
+        deadlineLabel.setForeground(AppColors.TEXT_SECONDARY);
 
         JPanel dateRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
         dateRow.setOpaque(false);
@@ -557,11 +476,6 @@ public class CalendarPanel extends JPanel {
         dtPanel.add(dateRow);
         dtPanel.add(Box.createRigidArea(new Dimension(0, 4)));
         dtPanel.add(timeRow);
-        dtPanel.setVisible(initHasDeadline);
-        deadlineCheck.addActionListener(e -> {
-            dtPanel.setVisible(deadlineCheck.isSelected());
-            dlg.pack();
-        });
 
         JPanel content = new JPanel();
         content.setLayout(new BoxLayout(content, BoxLayout.Y_AXIS));
@@ -571,8 +485,8 @@ public class CalendarPanel extends JPanel {
         content.add(Box.createRigidArea(new Dimension(0, 10)));
         content.add(fieldRow("說明", descScroll));
         content.add(Box.createRigidArea(new Dimension(0, 12)));
-        content.add(leftAlign(deadlineCheck));
-        content.add(Box.createRigidArea(new Dimension(0, 4)));
+        content.add(leftAlign(deadlineLabel));
+        content.add(Box.createRigidArea(new Dimension(0, 6)));
         content.add(leftAlign(dtPanel));
         content.add(Box.createRigidArea(new Dimension(0, 10)));
         content.add(leftAlign(importantCheck));
@@ -607,24 +521,20 @@ public class CalendarPanel extends JPanel {
                 JOptionPane.showMessageDialog(dlg, "標題不可為空。", "輸入錯誤", JOptionPane.WARNING_MESSAGE);
                 return;
             }
-            boolean hasDeadline = deadlineCheck.isSelected();
-            String dateVal = "", timeVal = "";
-            if (hasDeadline) {
-                int y=(int)yearSp.getValue(), mo=(int)monthSp.getValue(),
-                    d=(int)daySp.getValue(),  h=(int)hourSp.getValue(),
-                    mi=(int)minSp.getValue();
-                try { LocalDate.of(y, mo, d); }
-                catch (Exception ex) {
-                    JOptionPane.showMessageDialog(dlg,"日期不合法。","日期錯誤",JOptionPane.WARNING_MESSAGE);
-                    return;
-                }
-                dateVal = String.format("%04d-%02d-%02d", y, mo, d);
-                timeVal = String.format("%02d:%02d", h, mi);
+            int y=(int)yearSp.getValue(), mo=(int)monthSp.getValue(),
+                d=(int)daySp.getValue(),  h=(int)hourSp.getValue(),
+                mi=(int)minSp.getValue();
+            try { LocalDate.of(y, mo, d); }
+            catch (Exception ex) {
+                JOptionPane.showMessageDialog(dlg,"日期不合法。","日期錯誤",JOptionPane.WARNING_MESSAGE);
+                return;
             }
+            String dateVal = String.format("%04d-%02d-%02d", y, mo, d);
+            String timeVal = String.format("%02d:%02d", h, mi);
             if (isEdit) {
                 editTask.setTitle(titleVal);
                 editTask.setDescription(descArea.getText().trim());
-                editTask.setHasDeadline(hasDeadline);
+                editTask.setHasDeadline(true);
                 editTask.setDate(dateVal);
                 editTask.setTime(timeVal);
                 editTask.setImportant(importantCheck.isSelected());
@@ -634,7 +544,7 @@ public class CalendarPanel extends JPanel {
                 int nextId = tasks.isEmpty() ? 1
                         : tasks.stream().mapToInt(Task::getId).max().orElse(0) + 1;
                 Task t = new Task(nextId, titleVal, descArea.getText().trim(),
-                                  dateVal, timeVal, hasDeadline);
+                                  dateVal, timeVal, true);
                 t.setImportant(importantCheck.isSelected());
                 tasks.add(t);
             }
@@ -668,21 +578,6 @@ public class CalendarPanel extends JPanel {
 
     private JSpinner makeSpinner(int val, int min, int max, int step) {
         return new JSpinner(new SpinnerNumberModel(val, min, max, step));
-    }
-
-    private void deleteSelectedTask() {
-        if (selectedTask == null) return;
-        int confirm = JOptionPane.showConfirmDialog(this,
-                "確定要刪除「" + selectedTask.getTitle() + "」？",
-                "確認刪除", JOptionPane.YES_NO_OPTION);
-        if (confirm == JOptionPane.YES_OPTION) {
-            remindedIds.remove(selectedTask.getId());
-            tasks.remove(selectedTask);
-            selectedTask = null;
-            closePopover();
-            refreshSideButtons();
-            updateCalendar();
-        }
     }
 
     // ── 更新顯示 ──────────────────────────────────────────────────────────────
@@ -769,26 +664,6 @@ public class CalendarPanel extends JPanel {
                         "任務提醒", JOptionPane.INFORMATION_MESSAGE);
             }
         } catch (DateTimeParseException ignored) {}
-    }
-
-    // ── 側欄按鈕工廠 ──────────────────────────────────────────────────────────
-    private static JButton sideButton(String text) {
-        JButton b = new JButton(text);
-        b.setFont(AppFonts.BODY_SMALL);
-        b.setFocusPainted(false);
-        b.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-        return b;
-    }
-
-    private static void styleSideButton(JButton b) {
-        b.setMaximumSize(new Dimension(Integer.MAX_VALUE, 32));
-        b.setAlignmentX(Component.LEFT_ALIGNMENT);
-        b.setHorizontalAlignment(SwingConstants.LEFT);
-        b.setBorder(new EmptyBorder(5, 10, 5, 10));
-        b.setBackground(AppColors.BG_TERTIARY);
-        b.setForeground(AppColors.TEXT_PRIMARY);
-        b.setOpaque(true);
-        b.setContentAreaFilled(true);
     }
 
     // ── Cell Renderer ─────────────────────────────────────────────────────────

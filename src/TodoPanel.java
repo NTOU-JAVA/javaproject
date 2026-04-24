@@ -8,29 +8,22 @@ import java.time.format.DateTimeParseException;
 import java.util.List;
 
 /**
- * TodoPanel：代辦事項面板，風格與 CalendarPanel 統一。
- * 支援：標題、說明、可選 deadline、完成勾選、提醒。
+ * TodoPanel：代辦事項面板。
+ * 左側圓圈可點擊切換完成狀態；每列右側有編輯、刪除按鈕。
  */
 public class TodoPanel extends JPanel {
 
     private static final DateTimeFormatter REMINDER_FMT =
             DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
 
-    private final List<TodoItem>        todos;
-    private final Runnable              saveCallback;
+    private final List<TodoItem>         todos;
+    private final Runnable               saveCallback;
     private final java.util.Set<Integer> remindedIds = new java.util.HashSet<>();
-    private final Timer                 reminderTimer;
+    private final Timer                  reminderTimer;
 
-    // 清單區
-    private final DefaultListModel<TodoItem> listModel = new DefaultListModel<>();
-    private final JList<TodoItem>            todoList  = new JList<>(listModel);
-
-    // 右側操作按鈕
-    private final JButton editButton   = makeBtn("編輯");
-    private final JButton deleteButton = makeBtn("刪除");
-    private final JButton doneButton   = makeBtn("標記完成");
-
-    private boolean updatingList = false;
+    // 清單容器（BoxLayout 垂直排列）
+    private final JPanel listContainer = new JPanel();
+    { listContainer.setLayout(new BoxLayout(listContainer, BoxLayout.Y_AXIS)); }
 
     public TodoPanel(List<TodoItem> todos, Runnable saveCallback) {
         this.todos        = todos;
@@ -39,9 +32,9 @@ public class TodoPanel extends JPanel {
         setLayout(new BorderLayout(0, 0));
         setBackground(AppColors.BG_SECONDARY);
 
-        add(buildTopNav(),    BorderLayout.NORTH);
-        add(buildListArea(),  BorderLayout.CENTER);
-        add(buildSidePanel(), BorderLayout.EAST);
+        add(buildTopNav(),   BorderLayout.NORTH);
+        add(buildListArea(), BorderLayout.CENTER);
+        add(buildHintBar(),  BorderLayout.SOUTH);
 
         reminderTimer = new Timer(60_000, e -> scanReminders());
         reminderTimer.setInitialDelay(0);
@@ -75,117 +68,176 @@ public class TodoPanel extends JPanel {
     }
 
     // ── 清單區 ──────────────────────────────────────────────────────────────
-    private JPanel buildListArea() {
-        JPanel area = new JPanel(new BorderLayout());
-        area.setBackground(AppColors.BG_PRIMARY);
-        area.setBorder(new MatteBorder(1, 0, 1, 0, AppColors.BORDER_DEFAULT));
+    private JScrollPane buildListArea() {
+        listContainer.setBackground(AppColors.BG_PRIMARY);
 
-        todoList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
-        todoList.setBackground(AppColors.BG_PRIMARY);
-        todoList.setFixedCellHeight(52);
-        todoList.setCellRenderer(new TodoCellRenderer());
+        // 外層 wrapper：讓 listContainer 靠頂，不被 viewport 拉伸
+        JPanel wrapper = new JPanel(new BorderLayout());
+        wrapper.setBackground(AppColors.BG_PRIMARY);
+        wrapper.add(listContainer, BorderLayout.NORTH);
 
-        todoList.addListSelectionListener(e -> {
-            if (!e.getValueIsAdjusting() && !updatingList) refreshActionButtons();
-        });
+        JScrollPane sp = new JScrollPane(wrapper);
+        sp.setBorder(new MatteBorder(1, 0, 0, 0, AppColors.BORDER_DEFAULT));
+        sp.getVerticalScrollBar().setPreferredSize(new Dimension(6, 0));
+        sp.getViewport().setBackground(AppColors.BG_PRIMARY);
+        return sp;
+    }
 
-        todoList.addMouseListener(new MouseAdapter() {
+    // ── 底部提示列 ────────────────────────────────────────────────────────────
+    private JPanel buildHintBar() {
+        JPanel bar = new JPanel(new FlowLayout(FlowLayout.RIGHT, 16, 6));
+        bar.setBackground(AppColors.BG_SECONDARY);
+        bar.setBorder(new MatteBorder(1, 0, 0, 0, AppColors.BORDER_DEFAULT));
+        JLabel hint = new JLabel("點擊左側圓圈切換完成狀態　|　雙擊項目快速編輯");
+        hint.setFont(AppFonts.CAPTION);
+        hint.setForeground(AppColors.TEXT_TERTIARY);
+        bar.add(hint);
+        return bar;
+    }
+
+    // ── 建立每一列 TodoItem 的 UI ─────────────────────────────────────────────
+    private JPanel buildItemRow(TodoItem item, int rowIndex) {
+        JPanel row = new JPanel(new BorderLayout(0, 0)) {
+            @Override protected void paintComponent(Graphics g) {
+                super.paintComponent(g);
+                // 底部分隔線
+                g.setColor(AppColors.BORDER_DEFAULT);
+                g.drawLine(0, getHeight()-1, getWidth(), getHeight()-1);
+            }
+        };
+        row.setOpaque(true);
+        row.setBackground(rowIndex % 2 == 0 ? AppColors.BG_PRIMARY : new Color(0xFBFBF9));
+        // 最小高度 52px，內容多時自動撐高；寬度填滿
+        row.setMinimumSize(new Dimension(0, 52));
+        row.setMaximumSize(new Dimension(Integer.MAX_VALUE, Integer.MAX_VALUE));
+
+        // ── 左側：可點擊的圓圈 ──
+        JLabel circle = new JLabel(item.isCompleted() ? "✔" : "○", SwingConstants.CENTER);
+        circle.setFont(new Font("Serif", Font.PLAIN, 18));
+        circle.setForeground(item.isCompleted() ? AppColors.SUCCESS : AppColors.TEXT_TERTIARY);
+        circle.setPreferredSize(new Dimension(44, 44));
+        circle.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        circle.addMouseListener(new MouseAdapter() {
             @Override public void mouseClicked(MouseEvent e) {
-                int idx = todoList.locationToIndex(e.getPoint());
-                if (e.getClickCount() == 2 && idx >= 0)
-                    showTodoDialog(todos.get(idx));
+                item.setCompleted(!item.isCompleted());
+                saveCallback.run();
+                refreshList();
+            }
+            @Override public void mouseEntered(MouseEvent e) {
+                circle.setForeground(item.isCompleted()
+                        ? AppColors.SUCCESS.darker()
+                        : AppColors.ACCENT);
+            }
+            @Override public void mouseExited(MouseEvent e) {
+                circle.setForeground(item.isCompleted()
+                        ? AppColors.SUCCESS : AppColors.TEXT_TERTIARY);
             }
         });
 
-        JScrollPane sp = new JScrollPane(todoList);
-        sp.setBorder(null);
-        sp.getVerticalScrollBar().setPreferredSize(new Dimension(6, 0));
-        area.add(sp, BorderLayout.CENTER);
-        return area;
-    }
+        // ── 中間：標題 + 說明 + 期限（各自一行）──
+        JPanel center = new JPanel() {
+            @Override public Dimension getMaximumSize() {
+                // 讓 BoxLayout 不把 center 往下無限撐高
+                Dimension ps = getPreferredSize();
+                return new Dimension(Integer.MAX_VALUE, ps.height);
+            }
+        };
+        center.setLayout(new BoxLayout(center, BoxLayout.Y_AXIS));
+        center.setOpaque(false);
+        center.setBorder(new EmptyBorder(8, 0, 8, 0));
 
-    // ── 右側操作面板 ────────────────────────────────────────────────────────
-    private JPanel buildSidePanel() {
-        JPanel side = new JPanel();
-        side.setLayout(new BoxLayout(side, BoxLayout.Y_AXIS));
-        side.setBackground(AppColors.SIDEBAR_BG);
-        side.setPreferredSize(new Dimension(148, 0));
-        side.setBorder(new MatteBorder(0, 1, 0, 0, AppColors.BORDER_DEFAULT));
-
-        side.add(Box.createRigidArea(new Dimension(0, 56)));
-        side.add(sideLabel("代辦操作"));
-        side.add(Box.createRigidArea(new Dimension(0, 8)));
-
-        for (JButton b : new JButton[]{editButton, doneButton, deleteButton})
-            styleActionButton(b);
-
-        editButton.addActionListener(e -> {
-            TodoItem sel = todoList.getSelectedValue();
-            if (sel != null) showTodoDialog(sel);
-        });
-        doneButton.addActionListener(e -> toggleDone());
-        deleteButton.addActionListener(e -> deleteSelected());
-
-        side.add(sideBtn(editButton));
-        side.add(Box.createRigidArea(new Dimension(0, 6)));
-        side.add(sideBtn(doneButton));
-        side.add(Box.createRigidArea(new Dimension(0, 6)));
-        side.add(sideBtn(deleteButton));
-
-        side.add(Box.createRigidArea(new Dimension(0, 20)));
-        side.add(sideLabel("操作提示"));
-        side.add(Box.createRigidArea(new Dimension(0, 4)));
-
-        JLabel hint = new JLabel(
-            "<html><div style='width:110px;color:#A8A7A4;font-size:10px;line-height:1.5'>" +
-            "雙擊代辦項目<br>可快速編輯</div></html>");
-        hint.setBorder(new EmptyBorder(0, 12, 0, 4));
-        hint.setAlignmentX(Component.LEFT_ALIGNMENT);
-        side.add(hint);
-        side.add(Box.createVerticalGlue());
-
-        refreshActionButtons();
-        return side;
-    }
-
-    private JPanel sideBtn(JButton btn) {
-        JPanel p = new JPanel(new BorderLayout());
-        p.setOpaque(false);
-        p.setBorder(new EmptyBorder(0, 8, 0, 8));
-        p.add(btn);
-        p.setMaximumSize(new Dimension(Integer.MAX_VALUE, 34));
-        p.setAlignmentX(Component.LEFT_ALIGNMENT);
-        return p;
-    }
-
-    private JLabel sideLabel(String text) {
-        JLabel l = new JLabel(text.toUpperCase());
-        l.setFont(AppFonts.LABEL);
-        l.setForeground(AppColors.TEXT_TERTIARY);
-        l.setBorder(new EmptyBorder(0, 12, 0, 0));
-        l.setAlignmentX(Component.LEFT_ALIGNMENT);
-        l.setMaximumSize(new Dimension(Integer.MAX_VALUE, 20));
-        return l;
-    }
-
-    private void refreshActionButtons() {
-        boolean has = todoList.getSelectedValue() != null;
-        editButton.setEnabled(has);
-        deleteButton.setEnabled(has);
-        doneButton.setEnabled(has);
-        if (has && todoList.getSelectedValue() != null) {
-            doneButton.setText(todoList.getSelectedValue().isCompleted()
-                    ? "取消完成" : "標記完成");
+        JLabel titleLbl;
+        if (item.isCompleted()) {
+            titleLbl = new JLabel("<html><strike><font color='#A8A7A4'>"
+                    + escHtml(item.getTitle()) + "</font></strike></html>");
         } else {
-            doneButton.setText("標記完成");
+            titleLbl = new JLabel(item.getTitle());
+            titleLbl.setForeground(AppColors.TEXT_PRIMARY);
         }
+        titleLbl.setFont(AppFonts.BODY_SMALL);
+
+        // 說明行（支援換行）
+        String rt = item.getReminderTime();
+        String desc = item.getDescription();
+        titleLbl.setAlignmentX(Component.LEFT_ALIGNMENT);
+        center.add(titleLbl);
+
+        if (!item.isCompleted()) {
+            if (!desc.isEmpty()) {
+                // 把換行轉成 <br>，用 HTML 顯示
+                String descHtml = "<html><font color='#A8A7A4'>"
+                        + escHtml(desc).replace("\n", "<br>") + "</font></html>";
+                JLabel descLbl = new JLabel(descHtml);
+                descLbl.setFont(AppFonts.CAPTION);
+                descLbl.setAlignmentX(Component.LEFT_ALIGNMENT);
+                center.add(Box.createRigidArea(new Dimension(0, 1)));
+                center.add(descLbl);
+            }
+            if (rt != null) {
+                Color timeColor = AppColors.TEXT_TERTIARY;
+                try {
+                    LocalDateTime target = LocalDateTime.parse(rt, REMINDER_FMT);
+                    long mins = java.time.Duration.between(LocalDateTime.now(), target).toMinutes();
+                    if (mins >= 0 && mins <= 1440) timeColor = AppColors.DANGER;
+                } catch (Exception ignored) {}
+                JLabel timeLbl = new JLabel("[期限] " + rt.substring(5));
+                timeLbl.setFont(AppFonts.CAPTION);
+                timeLbl.setForeground(timeColor);
+                timeLbl.setAlignmentX(Component.LEFT_ALIGNMENT);
+                center.add(Box.createRigidArea(new Dimension(0, 1)));
+                center.add(timeLbl);
+            }
+        }
+
+        // ── 右側：編輯 + 刪除 按鈕（頂端對齊，不撐高）──
+        JPanel actions = new JPanel(new FlowLayout(FlowLayout.RIGHT, 6, 8));
+        actions.setOpaque(false);
+        actions.setAlignmentY(Component.TOP_ALIGNMENT);
+
+        JButton editBtn = actionBtn("編輯", AppColors.BG_TERTIARY, AppColors.TEXT_PRIMARY);
+        JButton delBtn  = actionBtn("刪除", AppColors.DANGER_LIGHT, AppColors.DANGER);
+
+        editBtn.addActionListener(e -> showTodoDialog(item));
+        delBtn.addActionListener(e  -> deleteItem(item));
+
+        actions.add(editBtn);
+        actions.add(delBtn);
+
+        // 雙擊整列也進入編輯
+        MouseAdapter dblClick = new MouseAdapter() {
+            @Override public void mouseClicked(MouseEvent e) {
+                if (e.getClickCount() == 2) showTodoDialog(item);
+            }
+        };
+        center.addMouseListener(dblClick);
+        row.addMouseListener(dblClick);
+
+        row.add(circle,  BorderLayout.WEST);
+        row.add(center,  BorderLayout.CENTER);
+        row.add(actions, BorderLayout.EAST);
+        return row;
     }
 
-    // ── 新增/編輯 Dialog（改用 JDialog，修正內容被截掉的問題） ──────────────
+    private static JButton actionBtn(String text, Color bg, Color fg) {
+        JButton b = new JButton(text);
+        b.setFont(AppFonts.CAPTION);
+        b.setBackground(bg);
+        b.setForeground(fg);
+        b.setBorder(new EmptyBorder(4, 10, 4, 10));
+        b.setFocusPainted(false);
+        b.setOpaque(true);
+        b.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        return b;
+    }
+
+    private static String escHtml(String s) {
+        return s.replace("&","&amp;").replace("<","&lt;").replace(">","&gt;");
+    }
+
+    // ── 新增/編輯 Dialog ─────────────────────────────────────────────────────
     private void showTodoDialog(TodoItem editItem) {
         boolean isEdit = (editItem != null);
 
-        // ── 取得父視窗 ──
         Window owner = SwingUtilities.getWindowAncestor(this);
         JDialog dlg = new JDialog(owner,
                 isEdit ? "編輯代辦" : "新增代辦",
@@ -193,7 +245,6 @@ public class TodoPanel extends JPanel {
         dlg.setLayout(new BorderLayout());
         dlg.setResizable(false);
 
-        // ── 欄位 ──
         JTextField titleField = new JTextField(isEdit ? editItem.getTitle() : "", 22);
         titleField.setFont(AppFonts.BODY_MEDIUM);
 
@@ -204,7 +255,6 @@ public class TodoPanel extends JPanel {
         JScrollPane descScroll = new JScrollPane(descArea);
         descScroll.setPreferredSize(new Dimension(280, 62));
 
-        // ── Deadline（提醒時間）可選 ──
         LocalDateTime base = LocalDateTime.now();
         if (isEdit && editItem.getReminderTime() != null) {
             try { base = LocalDateTime.parse(editItem.getReminderTime(), REMINDER_FMT); }
@@ -215,11 +265,11 @@ public class TodoPanel extends JPanel {
         JCheckBox deadlineCheck = new JCheckBox("設定截止提醒時間", initHasDeadline);
         deadlineCheck.setFont(AppFonts.BODY_SMALL);
 
-        JSpinner yearSp  = new JSpinner(new SpinnerNumberModel(base.getYear(),         2020, 2099, 1));
-        JSpinner monthSp = new JSpinner(new SpinnerNumberModel(base.getMonthValue(),   1,    12,   1));
-        JSpinner daySp   = new JSpinner(new SpinnerNumberModel(base.getDayOfMonth(),   1,    31,   1));
-        JSpinner hourSp  = new JSpinner(new SpinnerNumberModel(base.getHour(),         0,    23,   1));
-        JSpinner minSp   = new JSpinner(new SpinnerNumberModel(base.getMinute(),       0,    59,   1));
+        JSpinner yearSp  = new JSpinner(new SpinnerNumberModel(base.getYear(),       2020, 2099, 1));
+        JSpinner monthSp = new JSpinner(new SpinnerNumberModel(base.getMonthValue(), 1,    12,   1));
+        JSpinner daySp   = new JSpinner(new SpinnerNumberModel(base.getDayOfMonth(), 1,    31,   1));
+        JSpinner hourSp  = new JSpinner(new SpinnerNumberModel(base.getHour(),       0,    23,   1));
+        JSpinner minSp   = new JSpinner(new SpinnerNumberModel(base.getMinute(),     0,    59,   1));
 
         for (JSpinner s : new JSpinner[]{monthSp, daySp, hourSp, minSp})
             s.setEditor(new JSpinner.NumberEditor(s, "00"));
@@ -248,13 +298,11 @@ public class TodoPanel extends JPanel {
         dtPanel.add(timeRow);
         dtPanel.setVisible(initHasDeadline);
 
-        // 勾選截止時間時重新 pack，確保視窗大小正確展開
         deadlineCheck.addActionListener(e -> {
             dtPanel.setVisible(deadlineCheck.isSelected());
             dlg.pack();
         });
 
-        // ── 組合內容面板 ──
         JPanel content = new JPanel();
         content.setLayout(new BoxLayout(content, BoxLayout.Y_AXIS));
         content.setBorder(new EmptyBorder(16, 20, 8, 20));
@@ -267,7 +315,6 @@ public class TodoPanel extends JPanel {
         content.add(Box.createRigidArea(new Dimension(0, 4)));
         content.add(leftAlign(dtPanel));
 
-        // ── 底部按鈕列 ──
         JButton okBtn     = new JButton(isEdit ? "儲存" : "新增");
         JButton cancelBtn = new JButton("取消");
         okBtn.setFont(AppFonts.BODY_SMALL);
@@ -289,11 +336,9 @@ public class TodoPanel extends JPanel {
         dlg.pack();
         dlg.setLocationRelativeTo(this);
 
-        // ── 取消 ──
         cancelBtn.addActionListener(e -> dlg.dispose());
         dlg.getRootPane().setDefaultButton(okBtn);
 
-        // ── 確認儲存 ──
         okBtn.addActionListener(e -> {
             String titleVal = titleField.getText().trim();
             if (titleVal.isEmpty()) {
@@ -307,7 +352,7 @@ public class TodoPanel extends JPanel {
                 int y  = (int) yearSp.getValue(),  mo = (int) monthSp.getValue(),
                     d  = (int) daySp.getValue(),   h  = (int) hourSp.getValue(),
                     mi = (int) minSp.getValue();
-                try { LocalDateTime.of(y, mo, d, h, mi); }
+                try { java.time.LocalDate.of(y, mo, d); }
                 catch (Exception ex) {
                     JOptionPane.showMessageDialog(dlg, "日期不合法。",
                             "日期錯誤", JOptionPane.WARNING_MESSAGE);
@@ -337,68 +382,44 @@ public class TodoPanel extends JPanel {
         dlg.setVisible(true);
     }
 
-    /** 標籤 + 元件水平排列的一列 */
-    private JPanel fieldRow(String labelText, JComponent comp) {
-        JPanel row = new JPanel(new BorderLayout(8, 0));
-        row.setOpaque(false);
-        row.setMaximumSize(new Dimension(Integer.MAX_VALUE, Integer.MAX_VALUE));
-        JLabel lbl = new JLabel(labelText);
-        lbl.setFont(AppFonts.BODY_SMALL);
-        lbl.setForeground(AppColors.TEXT_SECONDARY);
-        lbl.setPreferredSize(new Dimension(36, 0));
-        row.add(lbl,  BorderLayout.WEST);
-        row.add(comp, BorderLayout.CENTER);
-        return row;
-    }
-
-    private JPanel leftAlign(JComponent comp) {
-        JPanel p = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
-        p.setOpaque(false);
-        p.setMaximumSize(new Dimension(Integer.MAX_VALUE, Integer.MAX_VALUE));
-        p.add(comp);
-        return p;
-    }
-
-    private void toggleDone() {
-        TodoItem sel = todoList.getSelectedValue();
-        if (sel == null) return;
-        sel.setCompleted(!sel.isCompleted());
-        todoList.repaint();
-        refreshActionButtons();
-        saveCallback.run();
-    }
-
-    private void deleteSelected() {
-        TodoItem sel = todoList.getSelectedValue();
-        if (sel == null) return;
+    private void deleteItem(TodoItem item) {
         int confirm = JOptionPane.showConfirmDialog(this,
-                "確定要刪除「" + sel.getTitle() + "」？", "確認刪除",
+                "確定要刪除「" + item.getTitle() + "」？", "確認刪除",
                 JOptionPane.YES_NO_OPTION);
         if (confirm != JOptionPane.YES_OPTION) return;
-        remindedIds.remove(sel.getId());
-        todos.remove(sel);
+        remindedIds.remove(item.getId());
+        todos.remove(item);
         refreshList();
         saveCallback.run();
     }
 
-    // ── 更新清單顯示 ─────────────────────────────────────────────────────────
+    // ── 更新清單顯示 ──────────────────────────────────────────────────────────
     public void refreshList() {
-        updatingList = true;
-        try {
-            todos.sort((a, b) -> {
-                if (a.isCompleted() != b.isCompleted())
-                    return a.isCompleted() ? 1 : -1;
-                String ta = a.getReminderTime(), tb = b.getReminderTime();
-                if (ta == null && tb == null) return 0;
-                if (ta == null) return 1;
-                if (tb == null) return -1;
-                return ta.compareTo(tb);
-            });
-            listModel.clear();
-            for (TodoItem t : todos) listModel.addElement(t);
-        } finally {
-            updatingList = false;
+        todos.sort((a, b) -> {
+            if (a.isCompleted() != b.isCompleted())
+                return a.isCompleted() ? 1 : -1;
+            String ta = a.getReminderTime(), tb = b.getReminderTime();
+            if (ta == null && tb == null) return 0;
+            if (ta == null) return 1;
+            if (tb == null) return -1;
+            return ta.compareTo(tb);
+        });
+
+        listContainer.removeAll();
+        for (int i = 0; i < todos.size(); i++) {
+            listContainer.add(buildItemRow(todos.get(i), i));
         }
+        // 空狀態提示
+        if (todos.isEmpty()) {
+            JLabel empty = new JLabel("目前沒有代辦事項，點擊右上角新增吧！", SwingConstants.CENTER);
+            empty.setFont(AppFonts.BODY_SMALL);
+            empty.setForeground(AppColors.TEXT_TERTIARY);
+            empty.setAlignmentX(Component.CENTER_ALIGNMENT);
+            empty.setBorder(new EmptyBorder(40, 0, 0, 0));
+            listContainer.add(empty);
+        }
+        listContainer.revalidate();
+        listContainer.repaint();
     }
 
     // ── Reminder ──────────────────────────────────────────────────────────────
@@ -421,94 +442,24 @@ public class TodoPanel extends JPanel {
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
-    private static JButton makeBtn(String text) {
-        JButton b = new JButton(text);
-        b.setFont(AppFonts.BODY_SMALL);
-        b.setFocusPainted(false);
-        b.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-        return b;
+    private JPanel fieldRow(String labelText, JComponent comp) {
+        JPanel row = new JPanel(new BorderLayout(8, 0));
+        row.setOpaque(false);
+        row.setMaximumSize(new Dimension(Integer.MAX_VALUE, Integer.MAX_VALUE));
+        JLabel lbl = new JLabel(labelText);
+        lbl.setFont(AppFonts.BODY_SMALL);
+        lbl.setForeground(AppColors.TEXT_SECONDARY);
+        lbl.setPreferredSize(new Dimension(36, 0));
+        row.add(lbl,  BorderLayout.WEST);
+        row.add(comp, BorderLayout.CENTER);
+        return row;
     }
 
-    private static void styleActionButton(JButton b) {
-        b.setMaximumSize(new Dimension(Integer.MAX_VALUE, 32));
-        b.setAlignmentX(Component.LEFT_ALIGNMENT);
-        b.setHorizontalAlignment(SwingConstants.LEFT);
-        b.setBorder(new EmptyBorder(5, 10, 5, 10));
-        b.setBackground(AppColors.BG_TERTIARY);
-        b.setForeground(AppColors.TEXT_PRIMARY);
-        b.setOpaque(true);
-        b.setContentAreaFilled(true);
-    }
-
-    // ── Cell Renderer ─────────────────────────────────────────────────────────
-    private static class TodoCellRenderer extends JPanel implements ListCellRenderer<TodoItem> {
-        private final JLabel iconLabel  = new JLabel();
-        private final JLabel titleLabel = new JLabel();
-        private final JLabel descLabel  = new JLabel();
-        private final JLabel timeLabel  = new JLabel();
-
-        TodoCellRenderer() {
-            setLayout(new BorderLayout(6, 0));
-            setBorder(new EmptyBorder(6, 10, 6, 10));
-
-            iconLabel.setPreferredSize(new Dimension(22, 22));
-            iconLabel.setFont(new Font("Serif", Font.PLAIN, 16));
-            iconLabel.setVerticalAlignment(SwingConstants.TOP);
-
-            JPanel center = new JPanel(new GridLayout(2, 1, 0, 1));
-            center.setOpaque(false);
-            center.add(titleLabel);
-            center.add(descLabel);
-            descLabel.setFont(AppFonts.CAPTION);
-            descLabel.setForeground(AppColors.TEXT_TERTIARY);
-
-            add(iconLabel, BorderLayout.WEST);
-            add(center,    BorderLayout.CENTER);
-            add(timeLabel, BorderLayout.EAST);
-            timeLabel.setFont(AppFonts.CAPTION);
-            timeLabel.setVerticalAlignment(SwingConstants.TOP);
-        }
-
-        @Override
-        public Component getListCellRendererComponent(JList<? extends TodoItem> list,
-                TodoItem t, int idx, boolean selected, boolean focused) {
-            setOpaque(true);
-
-            if (t.isCompleted()) {
-                iconLabel.setText("✔");
-                iconLabel.setForeground(new Color(0x2F9E44));
-                titleLabel.setText("<html><strike><font color='#A8A7A4'>"
-                        + t.getTitle() + "</font></strike></html>");
-                descLabel.setText("");
-            } else {
-                iconLabel.setText("○");
-                iconLabel.setForeground(AppColors.TEXT_TERTIARY);
-                titleLabel.setText(t.getTitle());
-                titleLabel.setForeground(AppColors.TEXT_PRIMARY);
-                String desc = t.getDescription();
-                descLabel.setText(desc != null && !desc.isEmpty() ? desc : "");
-            }
-            titleLabel.setFont(AppFonts.BODY_SMALL);
-
-            String rt = t.getReminderTime();
-            if (rt != null && !t.isCompleted()) {
-                try {
-                    LocalDateTime target = LocalDateTime.parse(rt, REMINDER_FMT);
-                    long mins = java.time.Duration.between(LocalDateTime.now(), target).toMinutes();
-                    timeLabel.setForeground(
-                            (mins >= 0 && mins <= 1440) ? AppColors.DANGER
-                                                        : AppColors.TEXT_TERTIARY);
-                } catch (Exception e) {
-                    timeLabel.setForeground(AppColors.TEXT_TERTIARY);
-                }
-                timeLabel.setText(rt.substring(5));
-            } else {
-                timeLabel.setText("");
-            }
-
-            setBackground(selected ? AppColors.ACCENT_LIGHT
-                    : (idx % 2 == 0 ? list.getBackground() : new Color(0xFBFBF9)));
-            return this;
-        }
+    private JPanel leftAlign(JComponent comp) {
+        JPanel p = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
+        p.setOpaque(false);
+        p.setMaximumSize(new Dimension(Integer.MAX_VALUE, Integer.MAX_VALUE));
+        p.add(comp);
+        return p;
     }
 }
