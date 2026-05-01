@@ -36,34 +36,39 @@ public class SchoolNewsCrawler {
     }
 
     /**
-     * 同步爬取公告（用於初始化）。
+     * 同步爬取公告與系所最新消息（用於初始化）。
      */
     private void fetchNews() {
         cachedNews.clear();
         try {
-            Document doc = Jsoup.connect(SCHOOL_URL).timeout(10000).get();
-            Elements links = doc.select(".mbox .mtitle a");
-
             String fetchTime = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
                     .format(java.time.LocalDateTime.now());
 
-            int id = 1;
-            for (Element link : links) {
-                String title = link.text();
-                String href = link.attr("href");
-
-                if (!title.isEmpty()) {
-                    // 補完相對路徑
-                    if (!href.startsWith("http")) {
-                        href = SCHOOL_URL + href;
-                    }
-                    cachedNews.add(new NewsItem(id++, title, href, fetchTime));
-                }
-            }
+            cachedNews.addAll(fetchSchoolAnnouncements(fetchTime));
+            cachedNews.addAll(NtouCseScraper.scrapeRecentNews());
         } catch (Exception e) {
             System.err.println("爬蟲錯誤: " + e.getMessage());
             e.printStackTrace();
         }
+    }
+
+    private List<NewsItem> fetchSchoolAnnouncements(String fetchTime) throws Exception {
+        List<NewsItem> result = new ArrayList<>();
+        Document doc = Jsoup.connect(SCHOOL_URL).timeout(10000).get();
+        Elements links = doc.select(".mbox .mtitle a");
+
+        int id = 1;
+        for (Element link : links) {
+            String title = link.text();
+            String href = link.attr("href");
+            if (title.isEmpty()) continue;
+
+            if (!href.startsWith("http")) {
+                href = SCHOOL_URL + href;
+            }
+            result.add(new NewsItem(id++, title, href, fetchTime));
+        }
+        return result;
     }
 
     /**

@@ -12,7 +12,7 @@ public class SchoolNewsPanel extends JPanel {
 
     private final SchoolNewsCrawler crawler;
     private final JPanel listContainer = new JPanel();
-    private final JLabel statusLabel = new JLabel("按下「重新整理」載入公告...");
+    private final JLabel statusLabel = new JLabel("按下「重新整理」載入公告與系所消息...");
     private JButton refreshBtn;
     private boolean hasLoaded = false;
 
@@ -42,7 +42,7 @@ public class SchoolNewsPanel extends JPanel {
         nav.setBackground(AppColors.BG_SECONDARY);
         nav.setBorder(new EmptyBorder(12, 16, 8, 16));
 
-        JLabel title = new JLabel("學校公告");
+        JLabel title = new JLabel("學校公告 / 系所消息");
         title.setFont(AppFonts.TITLE_MEDIUM);
         title.setForeground(AppColors.TEXT_PRIMARY);
 
@@ -173,17 +173,6 @@ public class SchoolNewsPanel extends JPanel {
         }
     }
 
-    // ── 判斷新聞是否應該顯示 ───────────────────────────────────────────────
-    private boolean isNewsIncluded(String title) {
-        return title.contains("校園行事曆") ||
-               title.contains("大學程式能力檢定CPE") ||
-               title.contains("1142學期資工系新生電腦選課") ||
-               title.contains("2026海洋盃程式競賽") ||
-               title.contains("資工系館WIFI使用說明") ||
-               title.contains("校內報修系統") ||
-               title.contains("海大學術庫");
-    }
-
     // ── 事件處理 ──────────────────────────────────────────────────────────────
     private void onRefreshClick() {
         statusLabel.setText("正在載入公告...");
@@ -207,14 +196,24 @@ public class SchoolNewsPanel extends JPanel {
                 empty.setAlignmentX(Component.CENTER_ALIGNMENT);
                 empty.setBorder(new EmptyBorder(40, 0, 0, 0));
                 listContainer.add(empty);
-                statusLabel.setText("載入完成 — " + news.size() + " 筆公告");
+                statusLabel.setText("載入完成 — 0 筆消息");
             } else {
                 int displayCount = 0;
                 for (NewsItem item : news) {
-                    if (isNewsIncluded(item.getTitle())) {
+                    if (isSchoolNewsIncluded(item.getTitle()) || isDeptNewsIncluded(item.getTitle())) {
                         listContainer.add(buildNewsRow(item));
                         displayCount++;
                     }
+                }
+                if (displayCount == 0) {
+                    JLabel empty = new JLabel(
+                            "目前沒有符合條件的公告，請稍後重試。",
+                            SwingConstants.CENTER);
+                    empty.setFont(AppFonts.BODY_SMALL);
+                    empty.setForeground(AppColors.TEXT_TERTIARY);
+                    empty.setAlignmentX(Component.CENTER_ALIGNMENT);
+                    empty.setBorder(new EmptyBorder(40, 0, 0, 0));
+                    listContainer.add(empty);
                 }
                 statusLabel.setText("載入完成 — " + displayCount + " 筆公告");
             }
@@ -223,5 +222,15 @@ public class SchoolNewsPanel extends JPanel {
             listContainer.repaint();
             refreshBtn.setEnabled(true);
         });
+    }
+
+    private boolean isSchoolNewsIncluded(String title) {
+        return title.contains("校園行事曆") ||
+               title.contains("大學程式能力檢定CPE");
+    }
+
+    private boolean isDeptNewsIncluded(String title) {
+        return title.startsWith("【最新消息】") ||
+               title.startsWith("【學業資訊】");
     }
 }
