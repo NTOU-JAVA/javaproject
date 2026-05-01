@@ -78,9 +78,9 @@ public class TodoPanel extends JPanel {
 
         JScrollPane sp = new JScrollPane(wrapper);
         sp.setBorder(new MatteBorder(1, 0, 0, 0, AppColors.BORDER_DEFAULT));
-        sp.getVerticalScrollBar().setPreferredSize(new Dimension(6, 0));
         sp.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
         sp.getViewport().setBackground(AppColors.BG_PRIMARY);
+        AppUIManager.applySlimScrollBar(sp);
         return sp;
     }
 
@@ -353,6 +353,7 @@ public class TodoPanel extends JPanel {
         descScroll.setBorder(new LineBorder(AppColors.BORDER_DEFAULT, 1, true));
         descScroll.setPreferredSize(new Dimension(0, 86));
         descScroll.setMinimumSize(new Dimension(0, 86));
+        AppUIManager.applySlimScrollBar(descScroll);
 
         // 截止時間
         LocalDateTime base = LocalDateTime.now();
@@ -367,29 +368,36 @@ public class TodoPanel extends JPanel {
         deadlineCheck.setForeground(AppColors.TEXT_SECONDARY);
         deadlineCheck.setOpaque(false);
 
-        JSpinner yearSp  = new JSpinner(new SpinnerNumberModel(base.getYear(),       2020, 2099, 1));
-        JSpinner monthSp = new JSpinner(new SpinnerNumberModel(base.getMonthValue(), 1,    12,   1));
-        JSpinner daySp   = new JSpinner(new SpinnerNumberModel(base.getDayOfMonth(), 1,    31,   1));
-        JSpinner hourSp  = new JSpinner(new SpinnerNumberModel(base.getHour(),       0,    23,   1));
-        JSpinner minSp   = new JSpinner(new SpinnerNumberModel(base.getMinute(),     0,    59,   1));
-        for (JSpinner s : new JSpinner[]{monthSp, daySp, hourSp, minSp})
-            s.setEditor(new JSpinner.NumberEditor(s, "00"));
-        yearSp .setPreferredSize(new Dimension(68, 28));
-        monthSp.setPreferredSize(new Dimension(50, 28));
-        daySp  .setPreferredSize(new Dimension(50, 28));
-        hourSp .setPreferredSize(new Dimension(50, 28));
-        minSp  .setPreferredSize(new Dimension(50, 28));
+        // ── 日期/時間 picker 按鈕 ──
+        final java.time.LocalDate[] selDate = { base.toLocalDate() };
+        final int[] selTime = { base.getHour(), base.getMinute() };
 
-        JPanel dateRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
+        java.time.format.DateTimeFormatter btnDateFmt =
+                java.time.format.DateTimeFormatter.ofPattern("yyyy/MM/dd");
+
+        JButton dateBtn = pickerBtn(selDate[0].format(btnDateFmt));
+        JButton timePickBtn = pickerBtn(String.format("%02d:%02d", selTime[0], selTime[1]));
+
+        dateBtn.addActionListener(e ->
+            AppUIManager.showDatePicker(dateBtn, selDate[0], date -> {
+                selDate[0] = date;
+                dateBtn.setText(date.format(btnDateFmt));
+            })
+        );
+        timePickBtn.addActionListener(e ->
+            AppUIManager.showTimePicker(timePickBtn, selTime[0], selTime[1], (h, m) -> {
+                selTime[0] = h; selTime[1] = m;
+                timePickBtn.setText(String.format("%02d:%02d", h, m));
+            })
+        );
+
+        JPanel dateRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 0));
         dateRow.setOpaque(false);
-        dateRow.add(styledLabel("日期"));
-        dateRow.add(yearSp); dateRow.add(styledLabel("/"));
-        dateRow.add(monthSp); dateRow.add(styledLabel("/")); dateRow.add(daySp);
+        dateRow.add(styledLabel("日期")); dateRow.add(dateBtn);
 
-        JPanel timeRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
+        JPanel timeRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 0));
         timeRow.setOpaque(false);
-        timeRow.add(styledLabel("時間"));
-        timeRow.add(hourSp); timeRow.add(styledLabel(":")); timeRow.add(minSp);
+        timeRow.add(styledLabel("時間")); timeRow.add(timePickBtn);
 
         // dtPanel：不放在固定高度容器裡，直接控制 GridBag row 的可見性
         JPanel dtPanel = new JPanel();
@@ -489,16 +497,9 @@ public class TodoPanel extends JPanel {
 
             String reminder = null;
             if (deadlineCheck.isSelected()) {
-                int y  = (int) yearSp.getValue(), mo = (int) monthSp.getValue(),
-                    d  = (int) daySp.getValue(),  h  = (int) hourSp.getValue(),
-                    mi = (int) minSp.getValue();
-                try { java.time.LocalDate.of(y, mo, d); }
-                catch (Exception ex) {
-                    JOptionPane.showMessageDialog(dlg, "日期不合法。",
-                            "日期錯誤", JOptionPane.WARNING_MESSAGE);
-                    return;
-                }
-                reminder = String.format("%04d-%02d-%02d %02d:%02d", y, mo, d, h, mi);
+                reminder = String.format("%04d-%02d-%02d %02d:%02d",
+                    selDate[0].getYear(), selDate[0].getMonthValue(), selDate[0].getDayOfMonth(),
+                    selTime[0], selTime[1]);
             }
 
             if (isEdit) {
@@ -583,6 +584,20 @@ public class TodoPanel extends JPanel {
                         "代辦提醒", JOptionPane.INFORMATION_MESSAGE);
             }
         } catch (DateTimeParseException ignored) {}
+    }
+
+    private static JButton pickerBtn(String text) {
+        JButton b = new JButton(text);
+        b.setFont(AppFonts.BODY_SMALL);
+        b.setForeground(AppColors.TEXT_PRIMARY);
+        b.setBackground(Color.WHITE);
+        b.setBorder(BorderFactory.createCompoundBorder(
+            new LineBorder(AppColors.BORDER_DEFAULT, 1, true),
+            new EmptyBorder(5, 10, 5, 10)));
+        b.setFocusPainted(false);
+        b.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        b.setOpaque(true);
+        return b;
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────

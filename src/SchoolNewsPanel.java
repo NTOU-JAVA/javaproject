@@ -71,8 +71,9 @@ public class SchoolNewsPanel extends JPanel {
 
         JScrollPane sp = new JScrollPane(wrapper);
         sp.setBorder(new MatteBorder(1, 0, 0, 0, AppColors.BORDER_DEFAULT));
-        sp.getVerticalScrollBar().setPreferredSize(new Dimension(12, 0));
         sp.getViewport().setBackground(AppColors.BG_PRIMARY);
+        sp.getVerticalScrollBar().setUnitIncrement(20);
+        AppUIManager.applySlimScrollBar(sp);
         return sp;
     }
 

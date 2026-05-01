@@ -168,8 +168,15 @@ public class CalendarPanel extends JPanel {
                 }
             });
 
-            // 不需要 ScrollPane，讓格子自然撐高即可
-            dayPanel.add(wrapper, BorderLayout.CENTER);
+            // ScrollPane：任務過多時可捲動
+            JScrollPane dayScroll = new JScrollPane(wrapper,
+                    JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED,
+                    JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+            dayScroll.setBorder(null);
+            dayScroll.getViewport().setBackground(AppColors.BG_PRIMARY);
+            dayScroll.getVerticalScrollBar().setUnitIncrement(16);
+            AppUIManager.applySlimScrollBar(dayScroll);
+            dayPanel.add(dayScroll, BorderLayout.CENTER);
             dayPanels[i] = dayPanel;
             grid.add(dayPanel);
         }
@@ -422,6 +429,7 @@ public class CalendarPanel extends JPanel {
                 // 最多顯示約 5 行，超出可捲動
                 descSp.setPreferredSize(new Dimension(252, 90));
                 descSp.setMaximumSize(new Dimension(Integer.MAX_VALUE, 90));
+                AppUIManager.applySlimScrollBar(descSp);
                 body.add(descSp);
                 body.add(Box.createRigidArea(new Dimension(0, 8)));
             }
@@ -586,6 +594,7 @@ public class CalendarPanel extends JPanel {
         descScroll.setBorder(new LineBorder(AppColors.BORDER_DEFAULT, 1, true));
         descScroll.setPreferredSize(new Dimension(0, 86));
         descScroll.setMinimumSize(new Dimension(0, 86));
+        AppUIManager.applySlimScrollBar(descScroll);
 
         int initH = 9, initM = 0;
         if (isEdit && !editTask.getTime().isEmpty()) {
@@ -594,29 +603,34 @@ public class CalendarPanel extends JPanel {
             catch (NumberFormatException ignored) {}
         }
 
-        JSpinner yearSp  = makeSpinner(initDate.getYear(),       2020, 2099, 1);
-        JSpinner monthSp = makeSpinner(initDate.getMonthValue(), 1,    12,   1);
-        JSpinner daySp   = makeSpinner(initDate.getDayOfMonth(), 1,    31,   1);
-        JSpinner hourSp  = makeSpinner(initH, 0, 23, 1);
-        JSpinner minSp   = makeSpinner(initM, 0, 59, 1);
-        for (JSpinner s : new JSpinner[]{monthSp, daySp, hourSp, minSp})
-            s.setEditor(new JSpinner.NumberEditor(s, "00"));
-        yearSp .setPreferredSize(new Dimension(68, 28));
-        monthSp.setPreferredSize(new Dimension(50, 28));
-        daySp  .setPreferredSize(new Dimension(50, 28));
-        hourSp .setPreferredSize(new Dimension(50, 28));
-        minSp  .setPreferredSize(new Dimension(50, 28));
+        // ── 日期按鈕（月曆 picker）──
+        final LocalDate[] selectedDate = { initDate };
+        final int[]       selectedTime = { initH, initM };
 
-        JPanel dateRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
+        DateTimeFormatter btnDateFmt = DateTimeFormatter.ofPattern("yyyy/MM/dd");
+        JButton dateBtn = pickerBtn(initDate.format(btnDateFmt));
+        JButton timeBtn = pickerBtn(String.format("%02d:%02d", initH, initM));
+
+        dateBtn.addActionListener(e ->
+            AppUIManager.showDatePicker(dateBtn, selectedDate[0], date -> {
+                selectedDate[0] = date;
+                dateBtn.setText(date.format(btnDateFmt));
+            })
+        );
+        timeBtn.addActionListener(e ->
+            AppUIManager.showTimePicker(timeBtn, selectedTime[0], selectedTime[1], (h, m) -> {
+                selectedTime[0] = h; selectedTime[1] = m;
+                timeBtn.setText(String.format("%02d:%02d", h, m));
+            })
+        );
+
+        JPanel dateRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 0));
         dateRow.setOpaque(false);
-        dateRow.add(dlgLabel("日期")); dateRow.add(yearSp);
-        dateRow.add(dlgLabel("/")); dateRow.add(monthSp);
-        dateRow.add(dlgLabel("/")); dateRow.add(daySp);
+        dateRow.add(dlgLabel("日期")); dateRow.add(dateBtn);
 
-        JPanel timeRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
+        JPanel timeRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 0));
         timeRow.setOpaque(false);
-        timeRow.add(dlgLabel("時間")); timeRow.add(hourSp);
-        timeRow.add(dlgLabel(":")); timeRow.add(minSp);
+        timeRow.add(dlgLabel("時間")); timeRow.add(timeBtn);
 
         // 行事曆一定要填日期，直接顯示，不需 checkbox
         JPanel dtPanel = new JPanel();
@@ -702,16 +716,9 @@ public class CalendarPanel extends JPanel {
                 titleField.requestFocus();
                 return;
             }
-            int y=(int)yearSp.getValue(), mo=(int)monthSp.getValue(),
-                d=(int)daySp.getValue(),  h=(int)hourSp.getValue(),
-                mi=(int)minSp.getValue();
-            try { LocalDate.of(y, mo, d); }
-            catch (Exception ex) {
-                JOptionPane.showMessageDialog(dlg,"日期不合法。","日期錯誤",JOptionPane.WARNING_MESSAGE);
-                return;
-            }
-            String dateVal = String.format("%04d-%02d-%02d", y, mo, d);
-            String timeVal = String.format("%02d:%02d", h, mi);
+            LocalDate chosenDate = selectedDate[0];
+            String dateVal = chosenDate.format(DateTimeFormatter.ISO_LOCAL_DATE);
+            String timeVal = String.format("%02d:%02d", selectedTime[0], selectedTime[1]);
             if (isEdit) {
                 editTask.setTitle(titleVal);
                 editTask.setDescription(descArea.getText().trim());
@@ -771,8 +778,18 @@ public class CalendarPanel extends JPanel {
         return p;
     }
 
-    private JSpinner makeSpinner(int val, int min, int max, int step) {
-        return new JSpinner(new SpinnerNumberModel(val, min, max, step));
+    private JButton pickerBtn(String text) {
+        JButton b = new JButton(text);
+        b.setFont(AppFonts.BODY_SMALL);
+        b.setForeground(AppColors.TEXT_PRIMARY);
+        b.setBackground(Color.WHITE);
+        b.setBorder(BorderFactory.createCompoundBorder(
+            new LineBorder(AppColors.BORDER_DEFAULT, 1, true),
+            new EmptyBorder(5, 10, 5, 10)));
+        b.setFocusPainted(false);
+        b.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        b.setOpaque(true);
+        return b;
     }
 
     // ── 更新顯示 ──────────────────────────────────────────────────────────────
