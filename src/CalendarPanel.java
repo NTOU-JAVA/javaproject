@@ -15,20 +15,16 @@ public class CalendarPanel extends JPanel {
     private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("MM/dd");
     private static final DateTimeFormatter ISO_FMT  = DateTimeFormatter.ISO_LOCAL_DATE;
 
-    private final JPanel[]           dayPanels    = new JPanel[7];
-    private final JLabel[]           dayLabels    = new JLabel[7];
-    private final JLabel             weekLabel    = new JLabel("", SwingConstants.CENTER);
-    private LocalDate                weekStart;
-    private final List<Task>         tasks;
-    private final List<JList<Task>>  dayTaskLists = new ArrayList<>();
-
-    private Task selectedTask     = null;
-    private int  selectedDayIndex = -1;
+    private final JPanel[]  dayPanels     = new JPanel[7];   // 外層格子
+    private final JLabel[]  dayLabels     = new JLabel[7];   // 日期標頭
+    private final JPanel[]  taskContainers = new JPanel[7];  // 任務列表容器
+    private final JLabel    weekLabel     = new JLabel("", SwingConstants.CENTER);
+    private LocalDate        weekStart;
+    private final List<Task> tasks;
 
     private final javax.swing.Timer reminderTimer;
     private final Set<Integer>      remindedIds = new HashSet<>();
 
-    // ── Popover ──
     private TaskPopover currentPopover = null;
 
     public CalendarPanel(List<Task> tasks) {
@@ -41,8 +37,8 @@ public class CalendarPanel extends JPanel {
         setLayout(new BorderLayout(0, 0));
         setBackground(AppColors.BG_SECONDARY);
 
-        add(buildTopNav(), BorderLayout.NORTH);
-        add(buildGrid(),   BorderLayout.CENTER);
+        add(buildTopNav(),  BorderLayout.NORTH);
+        add(buildGrid(),    BorderLayout.CENTER);
         add(buildHintBar(), BorderLayout.SOUTH);
 
         updateCalendar();
@@ -71,8 +67,8 @@ public class CalendarPanel extends JPanel {
         todayBtn.setFocusPainted(false);
         todayBtn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
 
-        prevBtn.addActionListener(e -> { closePopover(); weekStart = weekStart.minusWeeks(1); updateCalendar(); });
-        nextBtn.addActionListener(e -> { closePopover(); weekStart = weekStart.plusWeeks(1);  updateCalendar(); });
+        prevBtn.addActionListener(e  -> { closePopover(); weekStart = weekStart.minusWeeks(1); updateCalendar(); });
+        nextBtn.addActionListener(e  -> { closePopover(); weekStart = weekStart.plusWeeks(1);  updateCalendar(); });
         todayBtn.addActionListener(e -> {
             closePopover();
             LocalDate t = LocalDate.now();
@@ -129,9 +125,12 @@ public class CalendarPanel extends JPanel {
 
         for (int i = 0; i < 7; i++) {
             final int idx = i;
+
+            // 外層格子
             JPanel dayPanel = new JPanel(new BorderLayout());
             dayPanel.setBackground(AppColors.BG_PRIMARY);
 
+            // 日期標頭
             dayLabels[i] = new JLabel("", SwingConstants.CENTER);
             dayLabels[i].setFont(AppFonts.BODY_SMALL);
             dayLabels[i].setOpaque(true);
@@ -140,59 +139,113 @@ public class CalendarPanel extends JPanel {
             dayLabels[i].setPreferredSize(new Dimension(0, 44));
             dayPanel.add(dayLabels[i], BorderLayout.NORTH);
 
-            JList<Task> list = new JList<>(new DefaultListModel<>());
-            list.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
-            list.setBackground(AppColors.BG_PRIMARY);
-            list.setFixedCellHeight(30);
-            list.setCellRenderer(new TaskCellRenderer());
+            // 任務容器：BoxLayout 垂直堆疊，靠頂對齊
+            JPanel taskContainer = new JPanel();
+            taskContainer.setLayout(new BoxLayout(taskContainer, BoxLayout.Y_AXIS));
+            taskContainer.setBackground(AppColors.BG_PRIMARY);
+            taskContainers[i] = taskContainer;
 
-            list.addListSelectionListener(e -> {
-                if (!e.getValueIsAdjusting()) {
-                    Task sel = list.getSelectedValue();
-                    if (sel != null) {
-                        selectedTask = sel;
-                        selectedDayIndex = idx;
-                        for (int j = 0; j < dayTaskLists.size(); j++)
-                            if (j != idx) dayTaskLists.get(j).clearSelection();
-                    } else if (selectedDayIndex == idx) {
-                        selectedTask = null;
-                        selectedDayIndex = -1;
-                    }
+            // wrapper 讓任務靠頂，剩餘空白可點擊新增
+            JPanel wrapper = new JPanel(new BorderLayout());
+            wrapper.setBackground(AppColors.BG_PRIMARY);
+            wrapper.add(taskContainer, BorderLayout.NORTH);
+
+            // 點擊空白處新增任務
+            wrapper.addMouseListener(new MouseAdapter() {
+                @Override public void mouseClicked(MouseEvent e) {
+                    closePopover();
+                    openTaskDialog(null, weekStart.plusDays(idx));
                 }
             });
-
-            list.addMouseListener(new MouseAdapter() {
+            // taskContainer 空白處也新增
+            taskContainer.addMouseListener(new MouseAdapter() {
                 @Override public void mouseClicked(MouseEvent e) {
-                    int ci = list.locationToIndex(e.getPoint());
-                    if (ci >= 0) {
-                        Task clicked = ((DefaultListModel<Task>) list.getModel()).getElementAt(ci);
-                        selectedTask = clicked;
-                        selectedDayIndex = idx;
-                        list.setSelectedIndex(ci);
-                        for (int j = 0; j < dayTaskLists.size(); j++)
-                            if (j != idx) dayTaskLists.get(j).clearSelection();
-                        showPopover(clicked, list);
-                    } else {
+                    // 只有點到 taskContainer 本身（非子元件）才新增
+                    if (e.getSource() == taskContainer) {
                         closePopover();
-                        selectedTask = null;
                         openTaskDialog(null, weekStart.plusDays(idx));
                     }
                 }
             });
 
-            dayTaskLists.add(list);
-            JScrollPane sp = new JScrollPane(list);
-            sp.setBorder(null);
-            sp.getVerticalScrollBar().setPreferredSize(new Dimension(5, 0));
-            dayPanel.add(sp, BorderLayout.CENTER);
+            // 不需要 ScrollPane，讓格子自然撐高即可
+            dayPanel.add(wrapper, BorderLayout.CENTER);
             dayPanels[i] = dayPanel;
             grid.add(dayPanel);
         }
         return grid;
     }
 
+    // ── 建立單一任務卡片 ──────────────────────────────────────────────────────
+    private JPanel buildTaskCard(Task task, int dayIdx) {
+        JPanel card = new JPanel(new BorderLayout(4, 0));
+        card.setOpaque(true);
+        card.setBorder(new EmptyBorder(4, 6, 4, 6));
+        card.setMaximumSize(new Dimension(Integer.MAX_VALUE, Integer.MAX_VALUE));
+        card.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+
+        // 左側 dot
+        JLabel dot = new JLabel(task.isImportant() ? "!" : "-", SwingConstants.CENTER);
+        dot.setFont(new Font("Dialog", Font.BOLD, 11));
+        dot.setForeground(task.isImportant() ? AppColors.DANGER : AppColors.TEXT_TERTIARY);
+        dot.setPreferredSize(new Dimension(14, 14));
+        dot.setVerticalAlignment(SwingConstants.TOP);
+
+        // 右側：標題 + 時間
+        JPanel right = new JPanel();
+        right.setLayout(new BoxLayout(right, BoxLayout.Y_AXIS));
+        right.setOpaque(false);
+
+        // 標題 — 自動換行
+        JLabel titleLbl = new JLabel("<html>" + escHtml(task.getTitle()) + "</html>");
+        titleLbl.setFont(task.isImportant()
+                ? AppFonts.BODY_SMALL.deriveFont(Font.BOLD)
+                : AppFonts.BODY_SMALL);
+        titleLbl.setForeground(task.isImportant() ? AppColors.DANGER : AppColors.TEXT_PRIMARY);
+        titleLbl.setAlignmentX(Component.LEFT_ALIGNMENT);
+
+        right.add(titleLbl);
+
+        // 時間（若有）
+        if (task.hasDeadline() && !task.getTime().isEmpty()) {
+            JLabel timeLbl = new JLabel(task.getTime());
+            timeLbl.setFont(AppFonts.CAPTION);
+            timeLbl.setForeground(AppColors.TEXT_TERTIARY);
+            timeLbl.setAlignmentX(Component.LEFT_ALIGNMENT);
+            right.add(timeLbl);
+        }
+
+        card.add(dot,   BorderLayout.WEST);
+        card.add(right, BorderLayout.CENTER);
+
+        // 底部分隔線
+        card.setBorder(BorderFactory.createCompoundBorder(
+                new MatteBorder(0, 0, 1, 0, AppColors.BORDER_DEFAULT),
+                new EmptyBorder(4, 6, 4, 6)));
+
+        // hover 效果
+        card.addMouseListener(new MouseAdapter() {
+            @Override public void mouseEntered(MouseEvent e) {
+                card.setBackground(AppColors.ACCENT_LIGHT);
+                right.setBackground(AppColors.ACCENT_LIGHT);
+            }
+            @Override public void mouseExited(MouseEvent e) {
+                card.setBackground(AppColors.BG_PRIMARY);
+                right.setBackground(AppColors.BG_PRIMARY);
+            }
+            @Override public void mouseClicked(MouseEvent e) {
+                showPopover(task, card, dayIdx);
+            }
+        });
+
+        card.setBackground(AppColors.BG_PRIMARY);
+        right.setBackground(AppColors.BG_PRIMARY);
+
+        return card;
+    }
+
     // ── Popover 顯示 / 關閉 ──────────────────────────────────────────────────
-    private void showPopover(Task task, JList<Task> sourceList) {
+    private void showPopover(Task task, JPanel sourceCard, int dayIdx) {
         closePopover();
 
         JRootPane root = SwingUtilities.getRootPane(this);
@@ -208,7 +261,6 @@ public class CalendarPanel extends JPanel {
                 if (confirm == JOptionPane.YES_OPTION) {
                     remindedIds.remove(task.getId());
                     tasks.remove(task);
-                    selectedTask = null;
                     closePopover();
                     updateCalendar();
                 }
@@ -216,18 +268,14 @@ public class CalendarPanel extends JPanel {
             this::closePopover
         );
 
-        Point listLocInLayered = SwingUtilities.convertPoint(sourceList, 0, 0, layered);
+        Point cardLoc = SwingUtilities.convertPoint(sourceCard, 0, 0, layered);
         int popW = 280;
         int popH = currentPopover.getPreferredSize().height;
-        int x    = listLocInLayered.x + sourceList.getWidth() + 4;
-        int y    = listLocInLayered.y + 20;
+        int x    = cardLoc.x + sourceCard.getWidth() + 4;
+        int y    = cardLoc.y;
 
-        if (x + popW > layered.getWidth()) {
-            x = listLocInLayered.x - popW - 4;
-        }
-        if (y + popH > layered.getHeight()) {
-            y = Math.max(0, layered.getHeight() - popH - 8);
-        }
+        if (x + popW > layered.getWidth())  x = cardLoc.x - popW - 4;
+        if (y + popH > layered.getHeight()) y = Math.max(0, layered.getHeight() - popH - 8);
         x = Math.max(0, x);
 
         currentPopover.setBounds(x, y, popW, popH);
@@ -539,7 +587,6 @@ public class CalendarPanel extends JPanel {
                 editTask.setTime(timeVal);
                 editTask.setImportant(importantCheck.isSelected());
                 remindedIds.remove(editTask.getId());
-                selectedTask = null;
             } else {
                 int nextId = tasks.isEmpty() ? 1
                         : tasks.stream().mapToInt(Task::getId).max().orElse(0) + 1;
@@ -587,6 +634,7 @@ public class CalendarPanel extends JPanel {
         weekLabel.setText(weekStart.format(DATE_FMT) + " - " + weekEnd.format(DATE_FMT));
 
         for (int i = 0; i < 7; i++) {
+            final int idx = i;
             LocalDate date    = weekStart.plusDays(i);
             String    dateStr = date.format(ISO_FMT);
             boolean   isToday   = date.equals(today);
@@ -614,35 +662,35 @@ public class CalendarPanel extends JPanel {
             dayLabels[i].setBackground(bgColor);
             dayPanels[i].setBackground(bgColor);
 
-            JList<Task> list = dayTaskLists.get(i);
-            DefaultListModel<Task> model = (DefaultListModel<Task>) list.getModel();
-            model.clear();
+            // 清空並重建任務卡片
+            JPanel container = taskContainers[i];
+            container.removeAll();
+            container.setBackground(bgColor);
 
-            if (date.equals(today)) {
+            // 無截止日任務只顯示在今天
+            if (isToday) {
                 tasks.stream()
                      .filter(t -> !t.hasDeadline())
                      .sorted(Comparator.comparing(Task::getTitle))
-                     .forEach(model::addElement);
+                     .forEach(t -> container.add(buildTaskCard(t, idx)));
             }
+            // 有截止日任務
             tasks.stream()
                  .filter(t -> t.hasDeadline() && dateStr.equals(t.getDate()))
                  .sorted(Comparator.comparing(Task::getTime))
-                 .forEach(model::addElement);
+                 .forEach(t -> container.add(buildTaskCard(t, idx)));
 
-            if (selectedTask != null) {
-                boolean inCol =
-                    (selectedTask.hasDeadline() && selectedTask.getDate().equals(dateStr)) ||
-                    (!selectedTask.hasDeadline() && date.equals(today));
-                if (inCol) list.setSelectedValue(selectedTask, true);
-                else       list.clearSelection();
-            } else {
-                list.clearSelection();
-            }
+            container.revalidate();
+            container.repaint();
         }
     }
 
     private static String toHex(Color c) {
         return String.format("#%02X%02X%02X", c.getRed(), c.getGreen(), c.getBlue());
+    }
+
+    private static String escHtml(String s) {
+        return s.replace("&","&amp;").replace("<","&lt;").replace(">","&gt;");
     }
 
     // ── Reminder ──────────────────────────────────────────────────────────────
@@ -664,49 +712,5 @@ public class CalendarPanel extends JPanel {
                         "任務提醒", JOptionPane.INFORMATION_MESSAGE);
             }
         } catch (DateTimeParseException ignored) {}
-    }
-
-    // ── Cell Renderer ─────────────────────────────────────────────────────────
-    private static class TaskCellRenderer extends JPanel implements ListCellRenderer<Task> {
-        private final JLabel dotLabel   = new JLabel();
-        private final JLabel titleLabel = new JLabel();
-        private final JLabel timeLabel  = new JLabel();
-
-        TaskCellRenderer() {
-            setLayout(new BorderLayout(4, 0));
-            setBorder(new EmptyBorder(3, 6, 3, 6));
-            dotLabel.setPreferredSize(new Dimension(14, 14));
-            dotLabel.setFont(new Font("Dialog", Font.BOLD, 11));
-            JPanel left = new JPanel(new BorderLayout(3, 0));
-            left.setOpaque(false);
-            left.add(dotLabel,   BorderLayout.WEST);
-            left.add(titleLabel, BorderLayout.CENTER);
-            add(left,      BorderLayout.CENTER);
-            add(timeLabel, BorderLayout.EAST);
-            timeLabel.setFont(AppFonts.CAPTION);
-            timeLabel.setForeground(AppColors.TEXT_TERTIARY);
-        }
-
-        @Override
-        public Component getListCellRendererComponent(JList<? extends Task> list,
-                Task t, int idx, boolean selected, boolean focused) {
-            setOpaque(true);
-            if (t.isImportant()) {
-                dotLabel.setText("!");
-                dotLabel.setForeground(AppColors.DANGER);
-                titleLabel.setText(t.getTitle());
-                titleLabel.setForeground(AppColors.DANGER);
-                titleLabel.setFont(AppFonts.BODY_SMALL.deriveFont(Font.BOLD));
-            } else {
-                dotLabel.setText("-");
-                dotLabel.setForeground(AppColors.TEXT_TERTIARY);
-                titleLabel.setText(t.getTitle());
-                titleLabel.setForeground(AppColors.TEXT_PRIMARY);
-                titleLabel.setFont(AppFonts.BODY_SMALL);
-            }
-            timeLabel.setText(t.hasDeadline() ? t.getTime() : "");
-            setBackground(selected ? AppColors.ACCENT_LIGHT : list.getBackground());
-            return this;
-        }
     }
 }
