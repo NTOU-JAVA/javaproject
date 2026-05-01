@@ -276,15 +276,10 @@ public class CalendarPanel extends JPanel {
         currentPopover = new TaskPopover(task,
             () -> { closePopover(); openTaskDialog(task, null); },
             () -> {
-                int confirm = JOptionPane.showConfirmDialog(CalendarPanel.this,
-                        "確定要刪除「" + task.getTitle() + "」？",
-                        "確認刪除", JOptionPane.YES_NO_OPTION);
-                if (confirm == JOptionPane.YES_OPTION) {
-                    remindedIds.remove(task.getId());
-                    tasks.remove(task);
-                    closePopover();
-                    updateCalendar();
-                }
+                remindedIds.remove(task.getId());
+                tasks.remove(task);
+                closePopover();
+                updateCalendar();
             },
             this::closePopover
         );
@@ -418,10 +413,16 @@ public class CalendarPanel extends JPanel {
                 descArea.setLineWrap(true);
                 descArea.setWrapStyleWord(true);
                 descArea.setBorder(new EmptyBorder(6, 8, 6, 8));
-                descArea.setAlignmentX(Component.LEFT_ALIGNMENT);
-                descArea.setMaximumSize(new Dimension(252, 100));
-                descArea.setPreferredSize(new Dimension(252, Math.min(80, desc.length() * 2 + 30)));
-                body.add(descArea);
+
+                JScrollPane descSp = new JScrollPane(descArea,
+                        JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED,
+                        JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+                descSp.setBorder(null);
+                descSp.setAlignmentX(Component.LEFT_ALIGNMENT);
+                // 最多顯示約 5 行，超出可捲動
+                descSp.setPreferredSize(new Dimension(252, 90));
+                descSp.setMaximumSize(new Dimension(Integer.MAX_VALUE, 90));
+                body.add(descSp);
                 body.add(Box.createRigidArea(new Dimension(0, 8)));
             }
 
@@ -432,17 +433,35 @@ public class CalendarPanel extends JPanel {
                 body.add(Box.createRigidArea(new Dimension(0, 6)));
             }
 
-            JPanel btnRow = new JPanel(new FlowLayout(FlowLayout.RIGHT, 6, 8));
+            CardLayout btnCard = new CardLayout();
+            JPanel btnRow = new JPanel(btnCard);
             btnRow.setBackground(new Color(0xFAF9F7));
             btnRow.setBorder(new MatteBorder(1, 0, 0, 0, AppColors.BORDER_DEFAULT));
 
+            // 正常狀態：刪除 | 編輯
             JButton editBtn = popBtn("編輯", AppColors.ACCENT, Color.WHITE);
             JButton delBtn  = popBtn("刪除", AppColors.BG_TERTIARY, AppColors.DANGER);
-            editBtn.addActionListener(e -> onEdit.run());
-            delBtn .addActionListener(e -> onDelete.run());
+            JPanel normalPane = new JPanel(new FlowLayout(FlowLayout.RIGHT, 6, 8));
+            normalPane.setOpaque(false);
+            normalPane.add(delBtn);
+            normalPane.add(editBtn);
 
-            btnRow.add(delBtn);
-            btnRow.add(editBtn);
+            // 確認刪除狀態：取消 | 確認刪除
+            JButton cancelDelBtn  = popBtn("取消",    AppColors.BG_TERTIARY, AppColors.TEXT_SECONDARY);
+            JButton confirmDelBtn = popBtn("確認刪除", AppColors.DANGER,      Color.WHITE);
+            JPanel confirmPane = new JPanel(new FlowLayout(FlowLayout.RIGHT, 6, 8));
+            confirmPane.setOpaque(false);
+            confirmPane.add(cancelDelBtn);
+            confirmPane.add(confirmDelBtn);
+
+            btnRow.add(normalPane,  "normal");
+            btnRow.add(confirmPane, "confirm");
+            btnCard.show(btnRow, "normal");
+
+            editBtn.addActionListener(e -> onEdit.run());
+            delBtn.addActionListener(e -> btnCard.show(btnRow, "confirm"));
+            cancelDelBtn.addActionListener(e -> btnCard.show(btnRow, "normal"));
+            confirmDelBtn.addActionListener(e -> onDelete.run());
 
             add(header, BorderLayout.NORTH);
             add(body,   BorderLayout.CENTER);
@@ -487,29 +506,86 @@ public class CalendarPanel extends JPanel {
     private void openTaskDialog(Task editTask, LocalDate defaultDate) {
         boolean isEdit = (editTask != null);
         Window owner = SwingUtilities.getWindowAncestor(this);
-        JDialog dlg = new JDialog(owner, isEdit ? "編輯任務" : "新增任務",
-                Dialog.ModalityType.APPLICATION_MODAL);
+        JDialog dlg = new JDialog(owner, "", Dialog.ModalityType.APPLICATION_MODAL);
+        dlg.setUndecorated(true);
         dlg.setLayout(new BorderLayout());
-        dlg.setResizable(false);
+        dlg.setBackground(new Color(0, 0, 0, 0));
 
+        // ── 主容器（懸浮視窗風格：白底 + 明顯邊框 + 輕微陰影） ──
+        boolean isImportant = isEdit && editTask.isImportant();
+        Color headerBg = isImportant ? AppColors.DANGER_LIGHT : AppColors.ACCENT_LIGHT;
+        JPanel root = new JPanel(new BorderLayout()) {
+            @Override protected void paintComponent(Graphics g) {
+                Graphics2D g2 = (Graphics2D) g.create();
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                int W = getWidth()-7, H = getHeight()-7, R = 14;
+                // 陰影
+                g2.setColor(new Color(0, 0, 0, 28));
+                g2.fillRoundRect(5, 7, getWidth()-5, getHeight()-5, R, R);
+                // 白底（全部）
+                g2.setColor(Color.WHITE);
+                g2.fillRoundRect(0, 0, W, H, R, R);
+                // Header 色帶（上圓角）
+                JPanel hdr = (JPanel) getComponent(0);
+                int hh = hdr.getHeight();
+                g2.setColor(headerBg);
+                g2.fillRoundRect(0, 0, W, R + hh, R, R);
+                g2.fillRect(0, R, W, hh - R);
+                // 邊框
+                g2.setColor(AppColors.BORDER_HOVER);
+                g2.setStroke(new BasicStroke(1.5f));
+                g2.drawRoundRect(0, 0, W-1, H-1, R, R);
+                g2.dispose();
+            }
+        };
+        root.setOpaque(false);
+        root.setBorder(new EmptyBorder(0, 0, 7, 7));
+        dlg.add(root);
+
+        // ── Header（同懸浮視窗，帶關閉按鈕） ──
+        JPanel header = new JPanel(new BorderLayout());
+        header.setBackground(headerBg);
+        header.setBorder(new EmptyBorder(12, 16, 12, 10));
+        header.setOpaque(false);
+
+        JLabel headerTitle = new JLabel(isEdit ? "編輯任務" : "新增任務");
+        headerTitle.setFont(AppFonts.TITLE_SMALL);
+        headerTitle.setForeground(isImportant ? AppColors.DANGER : AppColors.ACCENT);
+
+        JButton closeBtn = new JButton("×");
+        closeBtn.setFont(new Font(AppFonts.BODY_MEDIUM.getFamily(), Font.PLAIN, 16));
+        closeBtn.setForeground(AppColors.TEXT_TERTIARY);
+        closeBtn.setBorder(new EmptyBorder(0, 8, 0, 4));
+        closeBtn.setFocusPainted(false);
+        closeBtn.setContentAreaFilled(false);
+        closeBtn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        closeBtn.addActionListener(e -> dlg.dispose());
+        header.add(headerTitle, BorderLayout.CENTER);
+        header.add(closeBtn,    BorderLayout.EAST);
+
+        // ── 欄位（GridBagLayout） ──
         LocalDate initDate = isEdit
                 ? (editTask.hasDeadline() && !editTask.getDate().isEmpty()
                    ? LocalDate.parse(editTask.getDate()) : LocalDate.now())
                 : (defaultDate != null ? defaultDate : LocalDate.now());
 
-        JTextField titleField = new JTextField(isEdit ? editTask.getTitle() : "", 24);
+        JTextField titleField = new JTextField(isEdit ? editTask.getTitle() : "");
         titleField.setFont(AppFonts.BODY_MEDIUM);
+        titleField.setBorder(BorderFactory.createCompoundBorder(
+            new LineBorder(AppColors.BORDER_DEFAULT, 1, true),
+            new EmptyBorder(5, 8, 5, 8)));
 
-        JTextArea descArea = new JTextArea(isEdit ? editTask.getDescription() : "", 3, 24);
+        JTextArea descArea = new JTextArea(isEdit ? editTask.getDescription() : "", 4, 0);
         descArea.setFont(AppFonts.BODY_SMALL);
         descArea.setLineWrap(true);
         descArea.setWrapStyleWord(true);
-        JScrollPane descScroll = new JScrollPane(descArea);
-        descScroll.setPreferredSize(new Dimension(300, 62));
-
-        JCheckBox importantCheck = new JCheckBox("[ ! ] 標記為重要任務",
-                isEdit && editTask.isImportant());
-        importantCheck.setFont(AppFonts.BODY_SMALL);
+        descArea.setBorder(new EmptyBorder(6, 8, 6, 8));
+        JScrollPane descScroll = new JScrollPane(descArea,
+                JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED,
+                JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+        descScroll.setBorder(new LineBorder(AppColors.BORDER_DEFAULT, 1, true));
+        descScroll.setPreferredSize(new Dimension(0, 86));
+        descScroll.setMinimumSize(new Dimension(0, 86));
 
         int initH = 9, initM = 0;
         if (isEdit && !editTask.getTime().isEmpty()) {
@@ -521,31 +597,28 @@ public class CalendarPanel extends JPanel {
         JSpinner yearSp  = makeSpinner(initDate.getYear(),       2020, 2099, 1);
         JSpinner monthSp = makeSpinner(initDate.getMonthValue(), 1,    12,   1);
         JSpinner daySp   = makeSpinner(initDate.getDayOfMonth(), 1,    31,   1);
-        JSpinner hourSp  = makeSpinner(initH,                    0,    23,   1);
-        JSpinner minSp   = makeSpinner(initM,                    0,    59,   1);
+        JSpinner hourSp  = makeSpinner(initH, 0, 23, 1);
+        JSpinner minSp   = makeSpinner(initM, 0, 59, 1);
         for (JSpinner s : new JSpinner[]{monthSp, daySp, hourSp, minSp})
             s.setEditor(new JSpinner.NumberEditor(s, "00"));
-        yearSp .setPreferredSize(new Dimension(68, 26));
-        monthSp.setPreferredSize(new Dimension(50, 26));
-        daySp  .setPreferredSize(new Dimension(50, 26));
-        hourSp .setPreferredSize(new Dimension(50, 26));
-        minSp  .setPreferredSize(new Dimension(50, 26));
-
-        JLabel deadlineLabel = new JLabel("截止日期與時間");
-        deadlineLabel.setFont(AppFonts.BODY_SMALL);
-        deadlineLabel.setForeground(AppColors.TEXT_SECONDARY);
+        yearSp .setPreferredSize(new Dimension(68, 28));
+        monthSp.setPreferredSize(new Dimension(50, 28));
+        daySp  .setPreferredSize(new Dimension(50, 28));
+        hourSp .setPreferredSize(new Dimension(50, 28));
+        minSp  .setPreferredSize(new Dimension(50, 28));
 
         JPanel dateRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
         dateRow.setOpaque(false);
-        dateRow.add(new JLabel("日期："));
-        dateRow.add(yearSp); dateRow.add(new JLabel("/")); dateRow.add(monthSp);
-        dateRow.add(new JLabel("/")); dateRow.add(daySp);
+        dateRow.add(dlgLabel("日期")); dateRow.add(yearSp);
+        dateRow.add(dlgLabel("/")); dateRow.add(monthSp);
+        dateRow.add(dlgLabel("/")); dateRow.add(daySp);
 
         JPanel timeRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
         timeRow.setOpaque(false);
-        timeRow.add(new JLabel("時間："));
-        timeRow.add(hourSp); timeRow.add(new JLabel(":")); timeRow.add(minSp);
+        timeRow.add(dlgLabel("時間")); timeRow.add(hourSp);
+        timeRow.add(dlgLabel(":")); timeRow.add(minSp);
 
+        // 行事曆一定要填日期，直接顯示，不需 checkbox
         JPanel dtPanel = new JPanel();
         dtPanel.setLayout(new BoxLayout(dtPanel, BoxLayout.Y_AXIS));
         dtPanel.setOpaque(false);
@@ -553,39 +626,68 @@ public class CalendarPanel extends JPanel {
         dtPanel.add(Box.createRigidArea(new Dimension(0, 4)));
         dtPanel.add(timeRow);
 
-        JPanel content = new JPanel();
-        content.setLayout(new BoxLayout(content, BoxLayout.Y_AXIS));
-        content.setBorder(new EmptyBorder(16, 20, 8, 20));
+        JCheckBox importantCheck = new JCheckBox("標記為重要任務", isEdit && editTask.isImportant());
+        importantCheck.setFont(AppFonts.BODY_SMALL);
+        importantCheck.setForeground(AppColors.DANGER);
+        importantCheck.setOpaque(false);
 
-        content.add(fieldRow("標題", titleField));
-        content.add(Box.createRigidArea(new Dimension(0, 10)));
-        content.add(fieldRow("說明", descScroll));
-        content.add(Box.createRigidArea(new Dimension(0, 12)));
-        content.add(leftAlign(deadlineLabel));
-        content.add(Box.createRigidArea(new Dimension(0, 6)));
-        content.add(leftAlign(dtPanel));
-        content.add(Box.createRigidArea(new Dimension(0, 10)));
-        content.add(leftAlign(importantCheck));
+        JPanel content = new JPanel(new GridBagLayout());
+        content.setOpaque(false);
+        content.setBorder(new EmptyBorder(14, 16, 10, 16));
 
-        JButton okBtn     = new JButton(isEdit ? "儲存" : "新增");
+        GridBagConstraints gc = new GridBagConstraints();
+        gc.gridx = 0; gc.weightx = 1.0;
+        gc.fill = GridBagConstraints.HORIZONTAL;
+        gc.anchor = GridBagConstraints.WEST;
+
+        gc.gridy = 0; gc.insets = new Insets(0, 0, 4, 0);
+        content.add(dlgFieldLabel("標題"), gc);
+        gc.gridy = 1; gc.insets = new Insets(0, 0, 12, 0);
+        content.add(titleField, gc);
+        gc.gridy = 2; gc.insets = new Insets(0, 0, 4, 0);
+        content.add(dlgFieldLabel("說明"), gc);
+        gc.gridy = 3; gc.insets = new Insets(0, 0, 12, 0);
+        content.add(descScroll, gc);
+        gc.gridy = 4; gc.insets = new Insets(0, 0, 4, 0);
+        content.add(dlgFieldLabel("截止日期與時間"), gc);
+        gc.gridy = 5; gc.insets = new Insets(0, 0, 12, 0);
+        content.add(dtPanel, gc);
+        gc.gridy = 6; gc.insets = new Insets(0, 0, 0, 0);
+        content.add(importantCheck, gc);
+
+        // ── 底部按鈕 ──
+        JPanel btnRow = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 10));
+        btnRow.setBackground(new Color(0xFAF9F7));
+        btnRow.setOpaque(true);
+        btnRow.setBorder(new MatteBorder(1, 0, 0, 0, AppColors.BORDER_DEFAULT));
+
         JButton cancelBtn = new JButton("取消");
-        okBtn.setFont(AppFonts.BODY_SMALL);
         cancelBtn.setFont(AppFonts.BODY_SMALL);
-        okBtn.setBackground(AppColors.ACCENT);
-        okBtn.setForeground(Color.WHITE);
-        okBtn.setFocusPainted(false);
-        okBtn.setBorder(new EmptyBorder(6, 20, 6, 20));
+        cancelBtn.setForeground(AppColors.TEXT_SECONDARY);
+        cancelBtn.setBackground(AppColors.BG_TERTIARY);
+        cancelBtn.setOpaque(true);
         cancelBtn.setBorder(new EmptyBorder(6, 16, 6, 16));
         cancelBtn.setFocusPainted(false);
+        cancelBtn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
 
-        JPanel btnRow = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 10));
-        btnRow.setBorder(new MatteBorder(1, 0, 0, 0, AppColors.BORDER_DEFAULT));
+        JButton okBtn = new JButton(isEdit ? "儲存變更" : "新增任務");
+        okBtn.setFont(AppFonts.BODY_SMALL);
+        okBtn.setBackground(AppColors.ACCENT);
+        okBtn.setForeground(Color.WHITE);
+        okBtn.setBorder(new EmptyBorder(6, 18, 6, 18));
+        okBtn.setFocusPainted(false);
+        okBtn.setOpaque(true);
+        okBtn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+
         btnRow.add(cancelBtn);
         btnRow.add(okBtn);
 
-        dlg.add(content, BorderLayout.CENTER);
-        dlg.add(btnRow,  BorderLayout.SOUTH);
+        root.add(header,  BorderLayout.NORTH);
+        root.add(content, BorderLayout.CENTER);
+        root.add(btnRow,  BorderLayout.SOUTH);
+
         dlg.pack();
+        dlg.setSize(400, dlg.getPreferredSize().height);
         dlg.setLocationRelativeTo(this);
 
         cancelBtn.addActionListener(e -> dlg.dispose());
@@ -594,7 +696,10 @@ public class CalendarPanel extends JPanel {
         okBtn.addActionListener(e -> {
             String titleVal = titleField.getText().trim();
             if (titleVal.isEmpty()) {
-                JOptionPane.showMessageDialog(dlg, "標題不可為空。", "輸入錯誤", JOptionPane.WARNING_MESSAGE);
+                titleField.setBorder(BorderFactory.createCompoundBorder(
+                    new LineBorder(AppColors.DANGER, 1, true),
+                    new EmptyBorder(5, 8, 5, 8)));
+                titleField.requestFocus();
                 return;
             }
             int y=(int)yearSp.getValue(), mo=(int)monthSp.getValue(),
@@ -628,6 +733,21 @@ public class CalendarPanel extends JPanel {
         });
 
         dlg.setVisible(true);
+    }
+
+    private static JLabel dlgFieldLabel(String text) {
+        JLabel l = new JLabel(text);
+        l.setFont(AppFonts.LABEL);
+        l.setForeground(AppColors.TEXT_SECONDARY);
+        l.setAlignmentX(Component.LEFT_ALIGNMENT);
+        return l;
+    }
+
+    private static JLabel dlgLabel(String text) {
+        JLabel l = new JLabel(text);
+        l.setFont(AppFonts.BODY_SMALL);
+        l.setForeground(AppColors.TEXT_SECONDARY);
+        return l;
     }
 
     private JPanel fieldRow(String labelText, JComponent comp) {

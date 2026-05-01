@@ -208,19 +208,40 @@ public class TodoPanel extends JPanel {
             }
         }
 
-        // ── 右側：編輯 + 刪除 按鈕（頂端對齊，不撐高）──
-        JPanel actions = new JPanel(new FlowLayout(FlowLayout.RIGHT, 6, 8));
+        // ── 右側按鈕區：CardLayout 切換「正常」與「確認刪除」兩種狀態 ──
+        CardLayout actionsCard = new CardLayout();
+        JPanel actions = new JPanel(actionsCard);
         actions.setOpaque(false);
-        actions.setAlignmentY(Component.TOP_ALIGNMENT);
 
-        JButton editBtn = actionBtn("編輯", AppColors.BG_TERTIARY, AppColors.TEXT_PRIMARY);
+        // 正常狀態：刪除 | 編輯
         JButton delBtn  = actionBtn("刪除", AppColors.DANGER_LIGHT, AppColors.DANGER);
+        JButton editBtn = actionBtn("編輯", AppColors.BG_TERTIARY,  AppColors.TEXT_PRIMARY);
+        JPanel normalPane = new JPanel(new FlowLayout(FlowLayout.RIGHT, 4, 8));
+        normalPane.setOpaque(false);
+        normalPane.add(delBtn);
+        normalPane.add(editBtn);
+
+        // 確認刪除狀態：取消 | 確認刪除
+        JButton cancelDelBtn  = actionBtn("取消",    AppColors.BG_TERTIARY, AppColors.TEXT_SECONDARY);
+        JButton confirmDelBtn = actionBtn("確認刪除", AppColors.DANGER,      Color.WHITE);
+        JPanel confirmPane = new JPanel(new FlowLayout(FlowLayout.RIGHT, 4, 8));
+        confirmPane.setOpaque(false);
+        confirmPane.add(cancelDelBtn);
+        confirmPane.add(confirmDelBtn);
+
+        actions.add(normalPane,  "normal");
+        actions.add(confirmPane, "confirm");
+        actionsCard.show(actions, "normal");
 
         editBtn.addActionListener(e -> showTodoDialog(item));
-        delBtn.addActionListener(e  -> deleteItem(item));
-
-        actions.add(editBtn);
-        actions.add(delBtn);
+        delBtn.addActionListener(e -> actionsCard.show(actions, "confirm"));
+        cancelDelBtn.addActionListener(e -> actionsCard.show(actions, "normal"));
+        confirmDelBtn.addActionListener(e -> {
+            remindedIds.remove(item.getId());
+            todos.remove(item);
+            refreshList();
+            saveCallback.run();
+        });
 
         // 雙擊整列也進入編輯
         MouseAdapter dblClick = new MouseAdapter() {
@@ -258,57 +279,119 @@ public class TodoPanel extends JPanel {
         boolean isEdit = (editItem != null);
 
         Window owner = SwingUtilities.getWindowAncestor(this);
-        JDialog dlg = new JDialog(owner,
-                isEdit ? "編輯代辦" : "新增代辦",
-                Dialog.ModalityType.APPLICATION_MODAL);
+        JDialog dlg = new JDialog(owner, "", Dialog.ModalityType.APPLICATION_MODAL);
+        dlg.setUndecorated(true);
         dlg.setLayout(new BorderLayout());
-        dlg.setResizable(false);
+        dlg.setBackground(new Color(0, 0, 0, 0));
 
-        JTextField titleField = new JTextField(isEdit ? editItem.getTitle() : "", 22);
+        // ── 主容器（懸浮視窗風格：白底 + 明顯邊框 + 陰影） ──
+        Color headerBg = AppColors.ACCENT_LIGHT;
+        JPanel root = new JPanel(new BorderLayout()) {
+            @Override protected void paintComponent(Graphics g) {
+                Graphics2D g2 = (Graphics2D) g.create();
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                int W = getWidth()-7, H = getHeight()-7, R = 14;
+                // 陰影
+                g2.setColor(new Color(0, 0, 0, 28));
+                g2.fillRoundRect(5, 7, getWidth()-5, getHeight()-5, R, R);
+                // 白底（全部）
+                g2.setColor(Color.WHITE);
+                g2.fillRoundRect(0, 0, W, H, R, R);
+                // Header 色帶（上圓角）
+                JPanel hdr = (JPanel) getComponent(0);
+                int hh = hdr.getHeight();
+                g2.setColor(headerBg);
+                g2.fillRoundRect(0, 0, W, R + hh, R, R);
+                g2.fillRect(0, R, W, hh - R);
+                // 邊框
+                g2.setColor(AppColors.BORDER_HOVER);
+                g2.setStroke(new BasicStroke(1.5f));
+                g2.drawRoundRect(0, 0, W-1, H-1, R, R);
+                g2.dispose();
+            }
+        };
+        root.setOpaque(false);
+        root.setBorder(new EmptyBorder(0, 0, 7, 7));
+        dlg.add(root);
+
+        // ── Header ──
+        JPanel header = new JPanel(new BorderLayout());
+        header.setBackground(AppColors.ACCENT_LIGHT);
+        header.setBorder(new EmptyBorder(12, 16, 12, 10));
+        header.setOpaque(false);
+
+        JLabel headerTitle = new JLabel(isEdit ? "編輯代辦事項" : "新增代辦事項");
+        headerTitle.setFont(AppFonts.TITLE_SMALL);
+        headerTitle.setForeground(AppColors.ACCENT);
+
+        JButton closeBtn = new JButton("×");
+        closeBtn.setFont(new Font(AppFonts.BODY_MEDIUM.getFamily(), Font.PLAIN, 16));
+        closeBtn.setForeground(AppColors.TEXT_TERTIARY);
+        closeBtn.setBorder(new EmptyBorder(0, 8, 0, 4));
+        closeBtn.setFocusPainted(false);
+        closeBtn.setContentAreaFilled(false);
+        closeBtn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        closeBtn.addActionListener(e -> dlg.dispose());
+        header.add(headerTitle, BorderLayout.CENTER);
+        header.add(closeBtn,    BorderLayout.EAST);
+
+        // ── 欄位 ──
+        JTextField titleField = new JTextField(isEdit ? editItem.getTitle() : "");
         titleField.setFont(AppFonts.BODY_MEDIUM);
+        titleField.setBorder(BorderFactory.createCompoundBorder(
+            new LineBorder(AppColors.BORDER_DEFAULT, 1, true),
+            new EmptyBorder(5, 8, 5, 8)));
 
-        JTextArea descArea = new JTextArea(isEdit ? editItem.getDescription() : "", 3, 22);
+        JTextArea descArea = new JTextArea(isEdit ? editItem.getDescription() : "", 4, 0);
         descArea.setFont(AppFonts.BODY_SMALL);
         descArea.setLineWrap(true);
         descArea.setWrapStyleWord(true);
-        JScrollPane descScroll = new JScrollPane(descArea);
-        descScroll.setPreferredSize(new Dimension(280, 62));
+        descArea.setBorder(new EmptyBorder(6, 8, 6, 8));
+        JScrollPane descScroll = new JScrollPane(descArea,
+                JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED,
+                JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+        descScroll.setBorder(new LineBorder(AppColors.BORDER_DEFAULT, 1, true));
+        descScroll.setPreferredSize(new Dimension(0, 86));
+        descScroll.setMinimumSize(new Dimension(0, 86));
 
+        // 截止時間
         LocalDateTime base = LocalDateTime.now();
         if (isEdit && editItem.getReminderTime() != null) {
             try { base = LocalDateTime.parse(editItem.getReminderTime(), REMINDER_FMT); }
             catch (DateTimeParseException ignored) {}
         }
-
         boolean initHasDeadline = isEdit && editItem.getReminderTime() != null;
+
         JCheckBox deadlineCheck = new JCheckBox("設定截止提醒時間", initHasDeadline);
         deadlineCheck.setFont(AppFonts.BODY_SMALL);
+        deadlineCheck.setForeground(AppColors.TEXT_SECONDARY);
+        deadlineCheck.setOpaque(false);
 
         JSpinner yearSp  = new JSpinner(new SpinnerNumberModel(base.getYear(),       2020, 2099, 1));
         JSpinner monthSp = new JSpinner(new SpinnerNumberModel(base.getMonthValue(), 1,    12,   1));
         JSpinner daySp   = new JSpinner(new SpinnerNumberModel(base.getDayOfMonth(), 1,    31,   1));
         JSpinner hourSp  = new JSpinner(new SpinnerNumberModel(base.getHour(),       0,    23,   1));
         JSpinner minSp   = new JSpinner(new SpinnerNumberModel(base.getMinute(),     0,    59,   1));
-
         for (JSpinner s : new JSpinner[]{monthSp, daySp, hourSp, minSp})
             s.setEditor(new JSpinner.NumberEditor(s, "00"));
-        yearSp .setPreferredSize(new Dimension(68, 26));
-        monthSp.setPreferredSize(new Dimension(48, 26));
-        daySp  .setPreferredSize(new Dimension(48, 26));
-        hourSp .setPreferredSize(new Dimension(48, 26));
-        minSp  .setPreferredSize(new Dimension(48, 26));
+        yearSp .setPreferredSize(new Dimension(68, 28));
+        monthSp.setPreferredSize(new Dimension(50, 28));
+        daySp  .setPreferredSize(new Dimension(50, 28));
+        hourSp .setPreferredSize(new Dimension(50, 28));
+        minSp  .setPreferredSize(new Dimension(50, 28));
 
-        JPanel dateRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 3, 0));
+        JPanel dateRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
         dateRow.setOpaque(false);
-        dateRow.add(new JLabel("日期 "));
-        dateRow.add(yearSp);  dateRow.add(new JLabel("/"));
-        dateRow.add(monthSp); dateRow.add(new JLabel("/")); dateRow.add(daySp);
+        dateRow.add(styledLabel("日期"));
+        dateRow.add(yearSp); dateRow.add(styledLabel("/"));
+        dateRow.add(monthSp); dateRow.add(styledLabel("/")); dateRow.add(daySp);
 
-        JPanel timeRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 3, 0));
+        JPanel timeRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
         timeRow.setOpaque(false);
-        timeRow.add(new JLabel("時間 "));
-        timeRow.add(hourSp); timeRow.add(new JLabel(":")); timeRow.add(minSp);
+        timeRow.add(styledLabel("時間"));
+        timeRow.add(hourSp); timeRow.add(styledLabel(":")); timeRow.add(minSp);
 
+        // dtPanel：不放在固定高度容器裡，直接控制 GridBag row 的可見性
         JPanel dtPanel = new JPanel();
         dtPanel.setLayout(new BoxLayout(dtPanel, BoxLayout.Y_AXIS));
         dtPanel.setOpaque(false);
@@ -317,42 +400,78 @@ public class TodoPanel extends JPanel {
         dtPanel.add(timeRow);
         dtPanel.setVisible(initHasDeadline);
 
+        // ── GridBagLayout 內容面板 ──
+        JPanel content = new JPanel(new GridBagLayout());
+        content.setOpaque(false);
+        content.setBorder(new EmptyBorder(14, 16, 10, 16));
+
+        GridBagConstraints gc = new GridBagConstraints();
+        gc.gridx = 0; gc.weightx = 1.0;
+        gc.fill = GridBagConstraints.HORIZONTAL;
+        gc.anchor = GridBagConstraints.WEST;
+
+        gc.gridy = 0; gc.insets = new Insets(0, 0, 4, 0);
+        content.add(fieldLabel("標題"), gc);
+        gc.gridy = 1; gc.insets = new Insets(0, 0, 12, 0);
+        content.add(titleField, gc);
+        gc.gridy = 2; gc.insets = new Insets(0, 0, 4, 0);
+        content.add(fieldLabel("說明"), gc);
+        gc.gridy = 3; gc.insets = new Insets(0, 0, 12, 0);
+        content.add(descScroll, gc);
+        gc.gridy = 4; gc.insets = new Insets(0, 0, initHasDeadline ? 6 : 0, 0);
+        content.add(deadlineCheck, gc);
+        gc.gridy = 5; gc.insets = new Insets(0, 0, 0, 0);
+        content.add(dtPanel, gc);
+
+        // checkbox 切換：只改 dtPanel 顯示，並縮排 dlg 高度
         deadlineCheck.addActionListener(e -> {
-            dtPanel.setVisible(deadlineCheck.isSelected());
+            boolean on = deadlineCheck.isSelected();
+            dtPanel.setVisible(on);
+            GridBagConstraints updGc = new GridBagConstraints();
+            updGc.gridx = 0; updGc.gridy = 4; updGc.weightx = 1.0;
+            updGc.fill = GridBagConstraints.HORIZONTAL;
+            updGc.anchor = GridBagConstraints.WEST;
+            updGc.insets = new Insets(0, 0, on ? 6 : 0, 0);
+            ((GridBagLayout) content.getLayout()).setConstraints(deadlineCheck, updGc);
+            content.revalidate();
+            content.repaint();
             dlg.pack();
+            dlg.setSize(400, dlg.getPreferredSize().height);
         });
 
-        JPanel content = new JPanel();
-        content.setLayout(new BoxLayout(content, BoxLayout.Y_AXIS));
-        content.setBorder(new EmptyBorder(16, 20, 8, 20));
+        // ── 底部按鈕列 ──
+        JPanel btnRow = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 10));
+        btnRow.setBackground(new Color(0xFAF9F7));
+        btnRow.setOpaque(true);
+        btnRow.setBorder(new MatteBorder(1, 0, 0, 0, AppColors.BORDER_DEFAULT));
 
-        content.add(fieldRow("標題", titleField));
-        content.add(Box.createRigidArea(new Dimension(0, 10)));
-        content.add(fieldRow("說明", descScroll));
-        content.add(Box.createRigidArea(new Dimension(0, 12)));
-        content.add(leftAlign(deadlineCheck));
-        content.add(Box.createRigidArea(new Dimension(0, 4)));
-        content.add(leftAlign(dtPanel));
-
-        JButton okBtn     = new JButton(isEdit ? "儲存" : "新增");
         JButton cancelBtn = new JButton("取消");
-        okBtn.setFont(AppFonts.BODY_SMALL);
         cancelBtn.setFont(AppFonts.BODY_SMALL);
-        okBtn.setBackground(AppColors.ACCENT);
-        okBtn.setForeground(Color.WHITE);
-        okBtn.setFocusPainted(false);
-        okBtn.setBorder(new EmptyBorder(6, 20, 6, 20));
+        cancelBtn.setForeground(AppColors.TEXT_SECONDARY);
+        cancelBtn.setBackground(AppColors.BG_TERTIARY);
+        cancelBtn.setOpaque(true);
         cancelBtn.setBorder(new EmptyBorder(6, 16, 6, 16));
         cancelBtn.setFocusPainted(false);
+        cancelBtn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
 
-        JPanel btnRow = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 10));
-        btnRow.setBorder(new MatteBorder(1, 0, 0, 0, AppColors.BORDER_DEFAULT));
+        JButton okBtn = new JButton(isEdit ? "儲存變更" : "新增");
+        okBtn.setFont(AppFonts.BODY_SMALL);
+        okBtn.setBackground(AppColors.ACCENT);
+        okBtn.setForeground(Color.WHITE);
+        okBtn.setBorder(new EmptyBorder(6, 18, 6, 18));
+        okBtn.setFocusPainted(false);
+        okBtn.setOpaque(true);
+        okBtn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+
         btnRow.add(cancelBtn);
         btnRow.add(okBtn);
 
-        dlg.add(content, BorderLayout.CENTER);
-        dlg.add(btnRow,  BorderLayout.SOUTH);
+        root.add(header,  BorderLayout.NORTH);
+        root.add(content, BorderLayout.CENTER);
+        root.add(btnRow,  BorderLayout.SOUTH);
+
         dlg.pack();
+        dlg.setSize(400, dlg.getPreferredSize().height);
         dlg.setLocationRelativeTo(this);
 
         cancelBtn.addActionListener(e -> dlg.dispose());
@@ -361,15 +480,17 @@ public class TodoPanel extends JPanel {
         okBtn.addActionListener(e -> {
             String titleVal = titleField.getText().trim();
             if (titleVal.isEmpty()) {
-                JOptionPane.showMessageDialog(dlg, "標題不可為空。",
-                        "輸入錯誤", JOptionPane.WARNING_MESSAGE);
+                titleField.setBorder(BorderFactory.createCompoundBorder(
+                    new LineBorder(AppColors.DANGER, 1, true),
+                    new EmptyBorder(6, 10, 6, 10)));
+                titleField.requestFocus();
                 return;
             }
 
             String reminder = null;
             if (deadlineCheck.isSelected()) {
-                int y  = (int) yearSp.getValue(),  mo = (int) monthSp.getValue(),
-                    d  = (int) daySp.getValue(),   h  = (int) hourSp.getValue(),
+                int y  = (int) yearSp.getValue(), mo = (int) monthSp.getValue(),
+                    d  = (int) daySp.getValue(),  h  = (int) hourSp.getValue(),
                     mi = (int) minSp.getValue();
                 try { java.time.LocalDate.of(y, mo, d); }
                 catch (Exception ex) {
@@ -401,15 +522,19 @@ public class TodoPanel extends JPanel {
         dlg.setVisible(true);
     }
 
-    private void deleteItem(TodoItem item) {
-        int confirm = JOptionPane.showConfirmDialog(this,
-                "確定要刪除「" + item.getTitle() + "」？", "確認刪除",
-                JOptionPane.YES_NO_OPTION);
-        if (confirm != JOptionPane.YES_OPTION) return;
-        remindedIds.remove(item.getId());
-        todos.remove(item);
-        refreshList();
-        saveCallback.run();
+    private static JLabel fieldLabel(String text) {
+        JLabel l = new JLabel(text);
+        l.setFont(AppFonts.LABEL);
+        l.setForeground(AppColors.TEXT_SECONDARY);
+        l.setAlignmentX(Component.LEFT_ALIGNMENT);
+        return l;
+    }
+
+    private static JLabel styledLabel(String text) {
+        JLabel l = new JLabel(text);
+        l.setFont(AppFonts.BODY_SMALL);
+        l.setForeground(AppColors.TEXT_SECONDARY);
+        return l;
     }
 
     // ── 更新清單顯示 ──────────────────────────────────────────────────────────
