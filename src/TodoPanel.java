@@ -79,6 +79,7 @@ public class TodoPanel extends JPanel {
         JScrollPane sp = new JScrollPane(wrapper);
         sp.setBorder(new MatteBorder(1, 0, 0, 0, AppColors.BORDER_DEFAULT));
         sp.getVerticalScrollBar().setPreferredSize(new Dimension(6, 0));
+        sp.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
         sp.getViewport().setBackground(AppColors.BG_PRIMARY);
         return sp;
     }
@@ -146,20 +147,38 @@ public class TodoPanel extends JPanel {
         center.setOpaque(false);
         center.setBorder(new EmptyBorder(8, 0, 8, 0));
 
-        JLabel titleLbl;
+        // 標題 — 使用 JTextArea 實現可靠換行
+        JTextArea titleLbl = new JTextArea(item.getTitle());
+        titleLbl.setFont(item.isCompleted()
+                ? AppFonts.BODY_SMALL
+                : AppFonts.BODY_SMALL);
+        titleLbl.setForeground(item.isCompleted()
+                ? AppColors.TEXT_TERTIARY
+                : AppColors.TEXT_PRIMARY);
         if (item.isCompleted()) {
-            titleLbl = new JLabel("<html><strike><font color='#A8A7A4'>"
-                    + escHtml(item.getTitle()) + "</font></strike></html>");
-        } else {
-            titleLbl = new JLabel(item.getTitle());
-            titleLbl.setForeground(AppColors.TEXT_PRIMARY);
+            // 刪除線效果：用 HTML label 疊加，但維持 JTextArea 換行
+            titleLbl.setForeground(new Color(0xA8A7A4));
         }
-        titleLbl.setFont(AppFonts.BODY_SMALL);
+        titleLbl.setEditable(false);
+        titleLbl.setFocusable(false);
+        titleLbl.setLineWrap(true);
+        titleLbl.setWrapStyleWord(true);
+        titleLbl.setOpaque(false);
+        titleLbl.setBorder(null);
+        titleLbl.setAlignmentX(Component.LEFT_ALIGNMENT);
+        titleLbl.setMaximumSize(new Dimension(Integer.MAX_VALUE, Integer.MAX_VALUE));
+        // 將滑鼠事件轉發給 row，確保雙擊編輯正常運作
+        titleLbl.addMouseListener(new MouseAdapter() {
+            @Override public void mouseClicked(MouseEvent e)  { row.dispatchEvent(SwingUtilities.convertMouseEvent(titleLbl, e, row)); }
+            @Override public void mouseEntered(MouseEvent e)  { row.dispatchEvent(SwingUtilities.convertMouseEvent(titleLbl, e, row)); }
+            @Override public void mouseExited(MouseEvent e)   { row.dispatchEvent(SwingUtilities.convertMouseEvent(titleLbl, e, row)); }
+            @Override public void mousePressed(MouseEvent e)  { row.dispatchEvent(SwingUtilities.convertMouseEvent(titleLbl, e, row)); }
+            @Override public void mouseReleased(MouseEvent e) { row.dispatchEvent(SwingUtilities.convertMouseEvent(titleLbl, e, row)); }
+        });
 
         // 說明行（支援換行）
         String rt = item.getReminderTime();
         String desc = item.getDescription();
-        titleLbl.setAlignmentX(Component.LEFT_ALIGNMENT);
         center.add(titleLbl);
 
         if (!item.isCompleted()) {

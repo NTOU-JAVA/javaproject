@@ -196,13 +196,32 @@ public class CalendarPanel extends JPanel {
         right.setLayout(new BoxLayout(right, BoxLayout.Y_AXIS));
         right.setOpaque(false);
 
-        // 標題 — 自動換行
-        JLabel titleLbl = new JLabel("<html>" + escHtml(task.getTitle()) + "</html>");
-        titleLbl.setFont(task.isImportant()
+        // 標題 — 使用 JTextArea 實現可靠換行
+        Font titleFont = task.isImportant()
                 ? AppFonts.BODY_SMALL.deriveFont(Font.BOLD)
-                : AppFonts.BODY_SMALL);
-        titleLbl.setForeground(task.isImportant() ? AppColors.DANGER : AppColors.TEXT_PRIMARY);
+                : AppFonts.BODY_SMALL;
+        Color titleColor = task.isImportant() ? AppColors.DANGER : AppColors.TEXT_PRIMARY;
+
+        JTextArea titleLbl = new JTextArea(task.getTitle());
+        titleLbl.setFont(titleFont);
+        titleLbl.setForeground(titleColor);
+        titleLbl.setEditable(false);
+        titleLbl.setFocusable(false);
+        titleLbl.setLineWrap(true);
+        titleLbl.setWrapStyleWord(true);
+        titleLbl.setOpaque(false);
+        titleLbl.setBorder(null);
         titleLbl.setAlignmentX(Component.LEFT_ALIGNMENT);
+        titleLbl.setMaximumSize(new Dimension(Integer.MAX_VALUE, Integer.MAX_VALUE));
+
+        // 將滑鼠事件轉發給 card，避免 JTextArea 吃掉點擊
+        titleLbl.addMouseListener(new MouseAdapter() {
+            @Override public void mouseClicked(MouseEvent e)  { card.dispatchEvent(SwingUtilities.convertMouseEvent(titleLbl, e, card)); }
+            @Override public void mouseEntered(MouseEvent e)  { card.dispatchEvent(SwingUtilities.convertMouseEvent(titleLbl, e, card)); }
+            @Override public void mouseExited(MouseEvent e)   { card.dispatchEvent(SwingUtilities.convertMouseEvent(titleLbl, e, card)); }
+            @Override public void mousePressed(MouseEvent e)  { card.dispatchEvent(SwingUtilities.convertMouseEvent(titleLbl, e, card)); }
+            @Override public void mouseReleased(MouseEvent e) { card.dispatchEvent(SwingUtilities.convertMouseEvent(titleLbl, e, card)); }
+        });
 
         right.add(titleLbl);
 
@@ -228,10 +247,12 @@ public class CalendarPanel extends JPanel {
             @Override public void mouseEntered(MouseEvent e) {
                 card.setBackground(AppColors.ACCENT_LIGHT);
                 right.setBackground(AppColors.ACCENT_LIGHT);
+                titleLbl.setBackground(AppColors.ACCENT_LIGHT);
             }
             @Override public void mouseExited(MouseEvent e) {
                 card.setBackground(AppColors.BG_PRIMARY);
                 right.setBackground(AppColors.BG_PRIMARY);
+                titleLbl.setBackground(AppColors.BG_PRIMARY);
             }
             @Override public void mouseClicked(MouseEvent e) {
                 showPopover(task, card, dayIdx);
@@ -330,9 +351,16 @@ public class CalendarPanel extends JPanel {
             header.setBackground(task.isImportant() ? AppColors.DANGER_LIGHT : AppColors.ACCENT_LIGHT);
             header.setBorder(new EmptyBorder(10, 14, 10, 10));
 
-            JLabel titleLbl = new JLabel("<html><b>" + escHtml(task.getTitle()) + "</b></html>");
-            titleLbl.setFont(AppFonts.BODY_MEDIUM);
+            JTextArea titleLbl = new JTextArea(task.getTitle());
+            titleLbl.setFont(AppFonts.BODY_MEDIUM.deriveFont(Font.BOLD));
             titleLbl.setForeground(task.isImportant() ? AppColors.DANGER : AppColors.ACCENT);
+            titleLbl.setBackground(task.isImportant() ? AppColors.DANGER_LIGHT : AppColors.ACCENT_LIGHT);
+            titleLbl.setEditable(false);
+            titleLbl.setFocusable(false);
+            titleLbl.setLineWrap(true);
+            titleLbl.setWrapStyleWord(true);
+            titleLbl.setOpaque(false);
+            titleLbl.setBorder(null);
 
             JButton closeBtn = new JButton("x");
             closeBtn.setFont(new Font(AppFonts.CAPTION.getFamily(), Font.PLAIN, 11));
