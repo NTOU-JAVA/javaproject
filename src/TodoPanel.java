@@ -53,7 +53,7 @@ public class TodoPanel extends JPanel {
         title.setFont(AppFonts.TITLE_MEDIUM);
         title.setForeground(AppColors.TEXT_PRIMARY);
 
-        JButton addBtn = new JButton("＋  新增代辦");
+        JButton addBtn = new JButton("+ 新增代辦");
         addBtn.setFont(AppFonts.BODY_SMALL);
         addBtn.setBackground(AppColors.ACCENT);
         addBtn.setForeground(Color.WHITE);

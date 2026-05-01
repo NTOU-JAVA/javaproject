@@ -46,7 +46,7 @@ public class SchoolNewsPanel extends JPanel {
         title.setFont(AppFonts.TITLE_MEDIUM);
         title.setForeground(AppColors.TEXT_PRIMARY);
 
-        refreshBtn = new JButton("🔄 重新整理");
+        refreshBtn = new JButton("重新整理");
         refreshBtn.setFont(AppFonts.BODY_SMALL);
         refreshBtn.setBackground(AppColors.ACCENT);
         refreshBtn.setForeground(Color.WHITE);
