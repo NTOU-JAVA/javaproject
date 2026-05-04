@@ -16,17 +16,21 @@ import java.util.List;
  * Main：應用程式進入點，負責初始化資料與 UI。
  */
 public class Main {
-    private final List<Task>     tasks = new ArrayList<>();
-    private final List<TodoItem> todos = new ArrayList<>();
+    private final List<Task>     tasks     = new ArrayList<>();
+    private final List<TodoItem> todos     = new ArrayList<>();
+    private final List<Schedule> schedules = new ArrayList<>();
     private MainFrame mainFrame;
-    private static final String TASKS_XML = "data/tasks.xml";
-    private static final String TODOS_XML = "data/todos.xml";
+    private static final String TASKS_XML     = "data/tasks.xml";
+    private static final String TODOS_XML     = "data/todos.xml";
+    private static final String SCHEDULES_XML = "data/schedules.xml";
 
     public Main() {
         new File("data").mkdirs();
         loadTasksFromXML();
         loadTodosFromXML();
-        mainFrame = new MainFrame(tasks, todos, this::saveTasksToXML, this::saveTodosToXML);
+        loadSchedulesFromXML();
+        mainFrame = new MainFrame(tasks, todos, schedules,
+                this::saveTasksToXML, this::saveTodosToXML, this::saveSchedulesToXML);
     }
 
     public static void main(String[] args) {
@@ -89,6 +93,81 @@ public class Main {
                 item.setCompleted(Boolean.parseBoolean(getText(el, "completed", "false")));
                 todos.add(item);
             }
+        } catch (Exception e) { e.printStackTrace(); }
+    }
+
+    private void loadSchedulesFromXML() {
+        try {
+            File file = new File(SCHEDULES_XML);
+            if (!file.exists()) return;
+            DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
+            DocumentBuilder db = dbf.newDocumentBuilder();
+            Document doc = db.parse(file);
+            doc.getDocumentElement().normalize();
+            NodeList schedNl = doc.getElementsByTagName("schedule");
+            for (int i = 0; i < schedNl.getLength(); i++) {
+                Element sEl  = (Element) schedNl.item(i);
+                int    sid   = parseInt(sEl, "id", 0);
+                String sName = getText(sEl, "name", "");
+                boolean active = Boolean.parseBoolean(getText(sEl, "active", "false"));
+                Schedule s = new Schedule(sid, sName);
+                s.setActive(active);
+                NodeList courseNl = sEl.getElementsByTagName("course");
+                for (int j = 0; j < courseNl.getLength(); j++) {
+                    Element cEl  = (Element) courseNl.item(j);
+                    int    cid   = parseInt(cEl, "id", 0);
+                    String cname = getText(cEl, "name", "");
+                    String code  = getText(cEl, "code", "");
+                    String loc   = getText(cEl, "location", "");
+                    String prof  = getText(cEl, "professor", "");
+                    String dept  = getText(cEl, "department", "");
+                    String cyear = getText(cEl, "classYear", "");
+                    int    day   = parseInt(cEl, "dayOfWeek", 1);
+                    int    start = parseInt(cEl, "startPeriod", 1);
+                    int    end   = parseInt(cEl, "endPeriod", 1);
+                    String note  = getText(cEl, "note", "");
+                    Course course = new Course(cid, cname, code, loc, prof, day, start, end, note);
+                    course.setDepartment(dept);
+                    course.setClassYear(cyear);
+                    s.getCourses().add(course);
+                }
+                schedules.add(s);
+            }
+        } catch (Exception e) { e.printStackTrace(); }
+    }
+
+    private void saveSchedulesToXML() {
+        try {
+            DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
+            DocumentBuilder db = dbf.newDocumentBuilder();
+            Document doc = db.newDocument();
+            Element root = doc.createElement("scheduleData");
+            doc.appendChild(root);
+            for (Schedule s : schedules) {
+                Element sEl = doc.createElement("schedule");
+                root.appendChild(sEl);
+                appendText(doc, sEl, "id",     String.valueOf(s.getId()));
+                appendText(doc, sEl, "name",   s.getName());
+                appendText(doc, sEl, "active", String.valueOf(s.isActive()));
+                Element coursesEl = doc.createElement("courses");
+                sEl.appendChild(coursesEl);
+                for (Course c : s.getCourses()) {
+                    Element cEl = doc.createElement("course");
+                    coursesEl.appendChild(cEl);
+                    appendText(doc, cEl, "id",          String.valueOf(c.getId()));
+                    appendText(doc, cEl, "name",        c.getName());
+                    appendText(doc, cEl, "code",        c.getCode());
+                    appendText(doc, cEl, "location",    c.getLocation());
+                    appendText(doc, cEl, "professor",   c.getProfessor());
+                    appendText(doc, cEl, "department",  c.getDepartment());
+                    appendText(doc, cEl, "classYear",   c.getClassYear());
+                    appendText(doc, cEl, "dayOfWeek",   String.valueOf(c.getDayOfWeek()));
+                    appendText(doc, cEl, "startPeriod", String.valueOf(c.getStartPeriod()));
+                    appendText(doc, cEl, "endPeriod",   String.valueOf(c.getEndPeriod()));
+                    appendText(doc, cEl, "note",        c.getNote());
+                }
+            }
+            writeXML(doc, SCHEDULES_XML);
         } catch (Exception e) { e.printStackTrace(); }
     }
 

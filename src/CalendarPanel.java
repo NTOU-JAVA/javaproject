@@ -517,7 +517,8 @@ public class CalendarPanel extends JPanel {
         JDialog dlg = new JDialog(owner, "", Dialog.ModalityType.APPLICATION_MODAL);
         dlg.setUndecorated(true);
         dlg.setLayout(new BorderLayout());
-        dlg.setBackground(new Color(0, 0, 0, 0));
+        // 修正 IME（中文輸入法）白屏 bug：移除透明背景
+        dlg.setBackground(new Color(0xF0F0F0));
 
         // ── 主容器（懸浮視窗風格：白底 + 明顯邊框 + 輕微陰影） ──
         boolean isImportant = isEdit && editTask.isImportant();
@@ -526,10 +527,15 @@ public class CalendarPanel extends JPanel {
             @Override protected void paintComponent(Graphics g) {
                 Graphics2D g2 = (Graphics2D) g.create();
                 g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                // 先填外層背景色，避免圓角外的角落白色殘留
+                g2.setColor(new Color(0xF0F0F0));
+                g2.fillRect(0, 0, getWidth(), getHeight());
                 int W = getWidth()-7, H = getHeight()-7, R = 14;
-                // 陰影
-                g2.setColor(new Color(0, 0, 0, 28));
-                g2.fillRoundRect(5, 7, getWidth()-5, getHeight()-5, R, R);
+                // 陰影（多層漸層）
+                for (int i = 4; i >= 1; i--) {
+                    g2.setColor(new Color(0, 0, 0, 7 * i));
+                    g2.fillRoundRect(i + 1, i + 2, getWidth() - i * 2 - 1, getHeight() - i * 2 - 1, R, R);
+                }
                 // 白底（全部）
                 g2.setColor(Color.WHITE);
                 g2.fillRoundRect(0, 0, W, H, R, R);

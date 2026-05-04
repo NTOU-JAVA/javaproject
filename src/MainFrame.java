@@ -16,13 +16,16 @@ public class MainFrame extends JFrame {
     private final CalendarPanel   calendarPanel;
     private final TodoPanel       todoPanel;
     private final SchoolNewsPanel newsPanel;
+    private final SchedulePanel   schedulePanel;
 
-    public MainFrame(List<Task> tasks, List<TodoItem> todos,
-                     Runnable saveTasksCallback, Runnable saveTodosCallback) {
+    public MainFrame(List<Task> tasks, List<TodoItem> todos, List<Schedule> schedules,
+                     Runnable saveTasksCallback, Runnable saveTodosCallback,
+                     Runnable saveSchedulesCallback) {
 
         calendarPanel = new CalendarPanel(tasks);
         todoPanel     = new TodoPanel(todos, saveTodosCallback);
         newsPanel     = new SchoolNewsPanel();
+        schedulePanel = new SchedulePanel(schedules, saveSchedulesCallback);
 
         setTitle("學生行程與任務管理系統");
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
@@ -34,6 +37,7 @@ public class MainFrame extends JFrame {
             @Override public void windowClosing(WindowEvent e) {
                 saveTasksCallback.run();
                 saveTodosCallback.run();
+                saveSchedulesCallback.run();
             }
         });
 
@@ -53,6 +57,7 @@ public class MainFrame extends JFrame {
         contentArea.add(calendarPanel, "calendar");
         contentArea.add(todoPanel,     "todo");
         contentArea.add(newsPanel,     "news");
+        contentArea.add(schedulePanel, "schedule");
         body.add(contentArea, BorderLayout.CENTER);
 
         root.add(body, BorderLayout.CENTER);
@@ -131,21 +136,22 @@ public class MainFrame extends JFrame {
         sb.add(Box.createRigidArea(new Dimension(0, 16)));
         sb.add(sectionLabel("主要功能"));
 
-        NavItem calNav  = new NavItem("任務行事曆");
-        NavItem todoNav = new NavItem("代辦事項");
-        NavItem newsNav = new NavItem("學校公告");
+        NavItem calNav      = new NavItem("任務行事曆");
+        NavItem todoNav     = new NavItem("代辦事項");
+        NavItem newsNav     = new NavItem("學校公告");
+        NavItem scheduleNav = new NavItem("課程課表");
 
-        calNav.addActionListener(e  -> switchTo("calendar", calNav));
-        todoNav.addActionListener(e -> switchTo("todo",     todoNav));
-        newsNav.addActionListener(e -> switchTo("news",     newsNav));
+        calNav.addActionListener(e      -> switchTo("calendar", calNav));
+        todoNav.addActionListener(e     -> switchTo("todo",     todoNav));
+        newsNav.addActionListener(e     -> switchTo("news",     newsNav));
+        scheduleNav.addActionListener(e -> switchTo("schedule", scheduleNav));
 
         sb.add(calNav);
         sb.add(todoNav);
         sb.add(newsNav);
+        sb.add(scheduleNav);
 
         sb.add(Box.createRigidArea(new Dimension(0, 12)));
-        sb.add(sectionLabel("即將推出"));
-        sb.add(disabledItem("課程課表"));
 
         sb.add(Box.createVerticalGlue());
 
