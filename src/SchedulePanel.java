@@ -164,7 +164,7 @@ public class SchedulePanel extends JPanel {
         left.add(addScheduleBtn);
         left.add(topControlPanel);
 
-        addCourseBtn = new JButton("＋  新增課程");
+        addCourseBtn = new JButton("+ 新增課程");
         addCourseBtn.setFont(AppFonts.BODY_SMALL);
         addCourseBtn.setBackground(AppColors.ACCENT);
         addCourseBtn.setForeground(Color.WHITE);
@@ -884,6 +884,16 @@ public class SchedulePanel extends JPanel {
         gc.gridy = r++; gc.insets = new Insets(0,0,4,0);   content.add(dlgFieldLabel("備註"), gc);
         gc.gridy = r++;  gc.insets = new Insets(0,0,0,0);  content.add(noteScroll, gc);
 
+        // 將 content 包進 JScrollPane，超出高度時可捲動
+        JScrollPane contentScroll = new JScrollPane(content,
+                JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED,
+                JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+        contentScroll.setBorder(null);
+        contentScroll.setOpaque(false);
+        contentScroll.getViewport().setOpaque(false);
+        contentScroll.getVerticalScrollBar().setUnitIncrement(16);
+        AppUIManager.applySlimScrollBar(contentScroll);
+
         Runnable onOk = () -> {
             String nameVal = nameField.getText().trim();
             if (nameVal.isEmpty()) {
@@ -920,11 +930,17 @@ public class SchedulePanel extends JPanel {
             dlg.dispose(); refreshGrid(); saveCallback.run();
         };
 
-        root.add(content, BorderLayout.CENTER);
+        root.add(contentScroll, BorderLayout.CENTER);
         root.add(buildDlgBtnRow(dlg, isEdit ? "儲存變更" : "新增課程", accentColor, onOk), BorderLayout.SOUTH);
         dlg.pack();
-        dlg.setSize(340 + 7, dlg.getHeight());
-        dlg.setLocationRelativeTo(this);
+        // 寬度固定 347，高度限制在螢幕可用高度的 85% 以內（保留空間給懸浮窗）
+        int screenH = java.awt.Toolkit.getDefaultToolkit().getScreenSize().height;
+        int maxH    = (int)(screenH * 0.85);
+        int dlgW    = 340 + 7;
+        int dlgH    = Math.min(dlg.getHeight(), maxH);
+        dlg.setSize(dlgW, dlgH);
+        // 置中於螢幕（而非相對 panel），確保不超出邊界
+        dlg.setLocationRelativeTo(null);
         dlg.setVisible(true);
     }
 
@@ -950,6 +966,7 @@ public class SchedulePanel extends JPanel {
         p.setBackground(AppColors.BG_SECONDARY);
         p.setBorder(new MatteBorder(0, 0, 1, 1, AppColors.BORDER_DEFAULT));
         p.setMinimumSize(new Dimension(0, 36));
+        p.setPreferredSize(new Dimension(80, 36)); // 給 GridBagLayout 一個合理基準，避免被課程卡文字撐大
         JLabel l = new JLabel(text, SwingConstants.CENTER);
         l.setFont(AppFonts.LABEL);
         l.setForeground(AppColors.TEXT_SECONDARY);
