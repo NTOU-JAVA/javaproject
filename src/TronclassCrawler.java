@@ -221,23 +221,85 @@ public class TronclassCrawler {
         System.out.println("✓ 共 " + todos.size() + " 個待辦事項");
     }
 
-    private static void saveTodosToXml(List<TodoItem> todos) {
+    private static void saveTodosToXml(List<TodoItem> newTodos) {
+        File xmlFile = new File("data/todos.xml");
+
+        // 讀取現有 XML，取出已有的 title 集合與最大 id，以及原始區塊
+        Set<String> existingTitles = new LinkedHashSet<>();
+        int maxId = 0;
+        String existingBlock = ""; // <todoData> 內的現有內容
+
+        if (xmlFile.exists()) {
+            try {
+                String content = new String(Files.readAllBytes(Paths.get(xmlFile.getAbsolutePath())), StandardCharsets.UTF_8);
+                // 提取所有現有 <todo>...</todo> 區塊
+                int pos = 0;
+                StringBuilder existing = new StringBuilder();
+                while (true) {
+                    int start = content.indexOf("<todo>", pos);
+                    if (start == -1) break;
+                    int end = content.indexOf("</todo>", start);
+                    if (end == -1) break;
+                    String block = content.substring(start, end + 7);
+                    existing.append("    ").append(block.trim()).append("\n");
+
+                    // 取出 title
+                    String t = extractXmlTag(block, "title");
+                    if (t != null) existingTitles.add(t);
+
+                    // 取出 id
+                    String idStr = extractXmlTag(block, "id");
+                    if (idStr != null) {
+                        try { maxId = Math.max(maxId, Integer.parseInt(idStr.trim())); }
+                        catch (NumberFormatException ignored) {}
+                    }
+                    pos = end + 7;
+                }
+                existingBlock = existing.toString();
+            } catch (Exception e) {
+                System.err.println("  ⚠ 讀取現有 XML 失敗，將重新建立: " + e.getMessage());
+            }
+        }
+
+        // 只加入標題不重複的新項目
+        StringBuilder newBlock = new StringBuilder();
+        int added = 0;
+        for (TodoItem t : newTodos) {
+            if (existingTitles.contains(t.title)) {
+                System.out.println("  ↩ 已存在，略過: " + t.title);
+                continue;
+            }
+            String reminder = formatDeadline(t.deadline);
+            newBlock.append("    <todo>\n")
+                    .append("        <id>").append(++maxId).append("</id>\n")
+                    .append("        <title>").append(escapeXml(t.title)).append("</title>\n")
+                    .append("        <description/>\n")
+                    .append("        <reminderTime>").append(reminder).append("</reminderTime>\n")
+                    .append("        <completed>false</completed>\n")
+                    .append("    </todo>\n");
+            added++;
+        }
+
+        // 組合輸出
         StringBuilder xml = new StringBuilder(
             "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"no\"?>\n<todoData>\n");
-        int id = 1;
-        for (TodoItem t : todos) {
-            String reminder = formatDeadline(t.deadline);
-            xml.append("    <todo>\n")
-               .append("        <id>").append(id++).append("</id>\n")
-               .append("        <title>").append(escapeXml(t.title)).append("</title>\n")
-               .append("        <description/>\n")
-               .append("        <reminderTime>").append(reminder).append("</reminderTime>\n")
-               .append("        <completed>false</completed>\n")
-               .append("    </todo>\n");
-        }
+        xml.append(existingBlock);
+        xml.append(newBlock);
         xml.append("</todoData>");
+
         saveToFile("data/todos.xml", xml.toString());
-        System.out.println("✓ 已儲存至 data/todos.xml");
+        System.out.println("✓ 已儲存至 data/todos.xml（新增 " + added + " 筆，保留原有 " + existingTitles.size() + " 筆）");
+    }
+
+    /** 從 XML 區塊中取出指定 tag 的文字內容 */
+    private static String extractXmlTag(String block, String tag) {
+        String open  = "<" + tag + ">";
+        String close = "</" + tag + ">";
+        int s = block.indexOf(open);
+        if (s == -1) return null;
+        int e = block.indexOf(close, s);
+        if (e == -1) return null;
+        return block.substring(s + open.length(), e);
     }
 
     /** 將 2026-06-08T15:59:00Z 轉為 2026-06-08 15:59 */
