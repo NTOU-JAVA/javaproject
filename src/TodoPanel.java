@@ -10,6 +10,7 @@ import java.util.List;
 /**
  * TodoPanel：代辦事項面板。
  * 左側圓圈可點擊切換完成狀態；每列右側有編輯、刪除按鈕。
+ * v0.4：新增 getTodos() 供 MainFrame 在登入同步後存取清單。
  */
 public class TodoPanel extends JPanel {
 
@@ -43,6 +44,9 @@ public class TodoPanel extends JPanel {
         refreshList();
     }
 
+    /** 回傳底層 todos 清單（與 Main 共用同一個參考，供登入同步使用）。 */
+    public List<TodoItem> getTodos() { return todos; }
+
     // ── 頂部列 ──────────────────────────────────────────────────────────────
     private JPanel buildTopNav() {
         JPanel nav = new JPanel(new BorderLayout());
@@ -71,7 +75,6 @@ public class TodoPanel extends JPanel {
     private JScrollPane buildListArea() {
         listContainer.setBackground(AppColors.BG_PRIMARY);
 
-        // 外層 wrapper：讓 listContainer 靠頂，不被 viewport 拉伸
         JPanel wrapper = new JPanel(new BorderLayout());
         wrapper.setBackground(AppColors.BG_PRIMARY);
         wrapper.add(listContainer, BorderLayout.NORTH);
@@ -101,18 +104,16 @@ public class TodoPanel extends JPanel {
         JPanel row = new JPanel(new BorderLayout(0, 0)) {
             @Override protected void paintComponent(Graphics g) {
                 super.paintComponent(g);
-                // 底部分隔線
                 g.setColor(AppColors.BORDER_DEFAULT);
                 g.drawLine(0, getHeight()-1, getWidth(), getHeight()-1);
             }
         };
         row.setOpaque(true);
         row.setBackground(rowIndex % 2 == 0 ? AppColors.BG_PRIMARY : new Color(0xFBFBF9));
-        // 最小高度 52px，內容多時自動撐高；寬度填滿
         row.setMinimumSize(new Dimension(0, 52));
         row.setMaximumSize(new Dimension(Integer.MAX_VALUE, Integer.MAX_VALUE));
 
-        // ── 左側：可點擊的圓圈 ──
+        // 左側：可點擊的圓圈
         JLabel circle = new JLabel(item.isCompleted() ? "✔" : "○", SwingConstants.CENTER);
         circle.setFont(new Font("Serif", Font.PLAIN, 18));
         circle.setForeground(item.isCompleted() ? AppColors.SUCCESS : AppColors.TEXT_TERTIARY);
@@ -125,20 +126,16 @@ public class TodoPanel extends JPanel {
                 refreshList();
             }
             @Override public void mouseEntered(MouseEvent e) {
-                circle.setForeground(item.isCompleted()
-                        ? AppColors.SUCCESS.darker()
-                        : AppColors.ACCENT);
+                circle.setForeground(item.isCompleted() ? AppColors.SUCCESS.darker() : AppColors.ACCENT);
             }
             @Override public void mouseExited(MouseEvent e) {
-                circle.setForeground(item.isCompleted()
-                        ? AppColors.SUCCESS : AppColors.TEXT_TERTIARY);
+                circle.setForeground(item.isCompleted() ? AppColors.SUCCESS : AppColors.TEXT_TERTIARY);
             }
         });
 
-        // ── 中間：標題 + 說明 + 期限（各自一行）──
+        // 中間：標題 + 說明 + 期限
         JPanel center = new JPanel() {
             @Override public Dimension getMaximumSize() {
-                // 讓 BoxLayout 不把 center 往下無限撐高
                 Dimension ps = getPreferredSize();
                 return new Dimension(Integer.MAX_VALUE, ps.height);
             }
@@ -147,18 +144,9 @@ public class TodoPanel extends JPanel {
         center.setOpaque(false);
         center.setBorder(new EmptyBorder(8, 0, 8, 0));
 
-        // 標題 — 使用 JTextArea 實現可靠換行
         JTextArea titleLbl = new JTextArea(item.getTitle());
-        titleLbl.setFont(item.isCompleted()
-                ? AppFonts.BODY_SMALL
-                : AppFonts.BODY_SMALL);
-        titleLbl.setForeground(item.isCompleted()
-                ? AppColors.TEXT_TERTIARY
-                : AppColors.TEXT_PRIMARY);
-        if (item.isCompleted()) {
-            // 刪除線效果：用 HTML label 疊加，但維持 JTextArea 換行
-            titleLbl.setForeground(new Color(0xA8A7A4));
-        }
+        titleLbl.setFont(AppFonts.BODY_SMALL);
+        titleLbl.setForeground(item.isCompleted() ? new Color(0xA8A7A4) : AppColors.TEXT_PRIMARY);
         titleLbl.setEditable(false);
         titleLbl.setFocusable(false);
         titleLbl.setLineWrap(true);
@@ -167,7 +155,6 @@ public class TodoPanel extends JPanel {
         titleLbl.setBorder(null);
         titleLbl.setAlignmentX(Component.LEFT_ALIGNMENT);
         titleLbl.setMaximumSize(new Dimension(Integer.MAX_VALUE, Integer.MAX_VALUE));
-        // 將滑鼠事件轉發給 row，確保雙擊編輯正常運作
         titleLbl.addMouseListener(new MouseAdapter() {
             @Override public void mouseClicked(MouseEvent e)  { row.dispatchEvent(SwingUtilities.convertMouseEvent(titleLbl, e, row)); }
             @Override public void mouseEntered(MouseEvent e)  { row.dispatchEvent(SwingUtilities.convertMouseEvent(titleLbl, e, row)); }
@@ -176,14 +163,12 @@ public class TodoPanel extends JPanel {
             @Override public void mouseReleased(MouseEvent e) { row.dispatchEvent(SwingUtilities.convertMouseEvent(titleLbl, e, row)); }
         });
 
-        // 說明行（支援換行）
-        String rt = item.getReminderTime();
+        String rt   = item.getReminderTime();
         String desc = item.getDescription();
         center.add(titleLbl);
 
         if (!item.isCompleted()) {
             if (!desc.isEmpty()) {
-                // 把換行轉成 <br>，用 HTML 顯示
                 String descHtml = "<html><font color='#A8A7A4'>"
                         + escHtml(desc).replace("\n", "<br>") + "</font></html>";
                 JLabel descLbl = new JLabel(descHtml);
@@ -208,12 +193,11 @@ public class TodoPanel extends JPanel {
             }
         }
 
-        // ── 右側按鈕區：CardLayout 切換「正常」與「確認刪除」兩種狀態 ──
+        // 右側：CardLayout 切換正常/確認刪除
         CardLayout actionsCard = new CardLayout();
         JPanel actions = new JPanel(actionsCard);
         actions.setOpaque(false);
 
-        // 正常狀態：刪除 | 編輯
         JButton delBtn  = actionBtn("刪除", AppColors.DANGER_LIGHT, AppColors.DANGER);
         JButton editBtn = actionBtn("編輯", AppColors.BG_TERTIARY,  AppColors.TEXT_PRIMARY);
         JPanel normalPane = new JPanel(new FlowLayout(FlowLayout.RIGHT, 4, 8));
@@ -221,7 +205,6 @@ public class TodoPanel extends JPanel {
         normalPane.add(delBtn);
         normalPane.add(editBtn);
 
-        // 確認刪除狀態：取消 | 確認刪除
         JButton cancelDelBtn  = actionBtn("取消",    AppColors.BG_TERTIARY, AppColors.TEXT_SECONDARY);
         JButton confirmDelBtn = actionBtn("確認刪除", AppColors.DANGER,      Color.WHITE);
         JPanel confirmPane = new JPanel(new FlowLayout(FlowLayout.RIGHT, 4, 8));
@@ -243,7 +226,6 @@ public class TodoPanel extends JPanel {
             saveCallback.run();
         });
 
-        // 雙擊整列也進入編輯
         MouseAdapter dblClick = new MouseAdapter() {
             @Override public void mouseClicked(MouseEvent e) {
                 if (e.getClickCount() == 2) showTodoDialog(item);
@@ -282,36 +264,29 @@ public class TodoPanel extends JPanel {
         JDialog dlg = new JDialog(owner, "", Dialog.ModalityType.APPLICATION_MODAL);
         dlg.setUndecorated(true);
         dlg.setLayout(new BorderLayout());
-        // 修正 IME（中文輸入法）白屏 bug：移除透明背景
         dlg.setBackground(new Color(0xF0F0F0));
 
-        // ── 主容器（懸浮視窗風格：白底 + 明顯邊框 + 陰影） ──
         Color headerBg = AppColors.ACCENT_LIGHT;
         JPanel root = new JPanel(new BorderLayout()) {
             @Override protected void paintComponent(Graphics g) {
                 Graphics2D g2 = (Graphics2D) g.create();
                 g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-                // 先填外層背景色，避免圓角外的角落白色殘留
                 g2.setColor(new Color(0xF0F0F0));
                 g2.fillRect(0, 0, getWidth(), getHeight());
                 int W = getWidth()-7, H = getHeight()-7, R = 14;
-                // 陰影（多層漸層）
                 for (int i = 4; i >= 1; i--) {
                     g2.setColor(new Color(0, 0, 0, 7 * i));
                     g2.fillRoundRect(i + 1, i + 2, getWidth() - i * 2 - 1, getHeight() - i * 2 - 1, R, R);
                 }
-                // 白底（全部）
                 g2.setColor(Color.WHITE);
                 g2.fillRoundRect(0, 0, W, H, R, R);
-                // Header 色帶（上圓角）
                 JPanel hdr = (JPanel) getComponent(0);
                 int hh = hdr.getHeight();
                 g2.setColor(headerBg);
                 g2.fillRoundRect(0, 0, W, R + hh, R, R);
                 g2.fillRect(0, R, W, hh - R);
-                // 邊框
                 g2.setColor(AppColors.BORDER_HOVER);
-                g2.setStroke(new BasicStroke(1.5f));
+                g2.setStroke(new java.awt.BasicStroke(1.5f));
                 g2.drawRoundRect(0, 0, W-1, H-1, R, R);
                 g2.dispose();
             }
@@ -320,7 +295,6 @@ public class TodoPanel extends JPanel {
         root.setBorder(new EmptyBorder(0, 0, 7, 7));
         dlg.add(root);
 
-        // ── Header ──
         JPanel header = new JPanel(new BorderLayout());
         header.setBackground(AppColors.ACCENT_LIGHT);
         header.setBorder(new EmptyBorder(12, 16, 12, 10));
@@ -341,7 +315,6 @@ public class TodoPanel extends JPanel {
         header.add(headerTitle, BorderLayout.CENTER);
         header.add(closeBtn,    BorderLayout.EAST);
 
-        // ── 欄位 ──
         JTextField titleField = new JTextField(isEdit ? editItem.getTitle() : "");
         titleField.setFont(AppFonts.BODY_MEDIUM);
         titleField.setBorder(BorderFactory.createCompoundBorder(
@@ -361,7 +334,6 @@ public class TodoPanel extends JPanel {
         descScroll.setMinimumSize(new Dimension(0, 86));
         AppUIManager.applySlimScrollBar(descScroll);
 
-        // 截止時間
         LocalDateTime base = LocalDateTime.now();
         if (isEdit && editItem.getReminderTime() != null) {
             try { base = LocalDateTime.parse(editItem.getReminderTime(), REMINDER_FMT); }
@@ -374,14 +346,13 @@ public class TodoPanel extends JPanel {
         deadlineCheck.setForeground(AppColors.TEXT_SECONDARY);
         deadlineCheck.setOpaque(false);
 
-        // ── 日期/時間 picker 按鈕 ──
         final java.time.LocalDate[] selDate = { base.toLocalDate() };
         final int[] selTime = { base.getHour(), base.getMinute() };
 
         java.time.format.DateTimeFormatter btnDateFmt =
                 java.time.format.DateTimeFormatter.ofPattern("yyyy/MM/dd");
 
-        JButton dateBtn = pickerBtn(selDate[0].format(btnDateFmt));
+        JButton dateBtn     = pickerBtn(selDate[0].format(btnDateFmt));
         JButton timePickBtn = pickerBtn(String.format("%02d:%02d", selTime[0], selTime[1]));
 
         dateBtn.addActionListener(e ->
@@ -405,7 +376,6 @@ public class TodoPanel extends JPanel {
         timeRow.setOpaque(false);
         timeRow.add(styledLabel("時間")); timeRow.add(timePickBtn);
 
-        // dtPanel：不放在固定高度容器裡，直接控制 GridBag row 的可見性
         JPanel dtPanel = new JPanel();
         dtPanel.setLayout(new BoxLayout(dtPanel, BoxLayout.Y_AXIS));
         dtPanel.setOpaque(false);
@@ -414,7 +384,6 @@ public class TodoPanel extends JPanel {
         dtPanel.add(timeRow);
         dtPanel.setVisible(initHasDeadline);
 
-        // ── GridBagLayout 內容面板 ──
         JPanel content = new JPanel(new GridBagLayout());
         content.setOpaque(false);
         content.setBorder(new EmptyBorder(14, 16, 10, 16));
@@ -424,20 +393,14 @@ public class TodoPanel extends JPanel {
         gc.fill = GridBagConstraints.HORIZONTAL;
         gc.anchor = GridBagConstraints.WEST;
 
-        gc.gridy = 0; gc.insets = new Insets(0, 0, 4, 0);
-        content.add(fieldLabel("標題"), gc);
-        gc.gridy = 1; gc.insets = new Insets(0, 0, 12, 0);
-        content.add(titleField, gc);
-        gc.gridy = 2; gc.insets = new Insets(0, 0, 4, 0);
-        content.add(fieldLabel("說明"), gc);
-        gc.gridy = 3; gc.insets = new Insets(0, 0, 12, 0);
-        content.add(descScroll, gc);
+        gc.gridy = 0; gc.insets = new Insets(0, 0, 4, 0);  content.add(fieldLabel("標題"), gc);
+        gc.gridy = 1; gc.insets = new Insets(0, 0, 12, 0); content.add(titleField, gc);
+        gc.gridy = 2; gc.insets = new Insets(0, 0, 4, 0);  content.add(fieldLabel("說明"), gc);
+        gc.gridy = 3; gc.insets = new Insets(0, 0, 12, 0); content.add(descScroll, gc);
         gc.gridy = 4; gc.insets = new Insets(0, 0, initHasDeadline ? 6 : 0, 0);
         content.add(deadlineCheck, gc);
-        gc.gridy = 5; gc.insets = new Insets(0, 0, 0, 0);
-        content.add(dtPanel, gc);
+        gc.gridy = 5; gc.insets = new Insets(0, 0, 0, 0);  content.add(dtPanel, gc);
 
-        // checkbox 切換：只改 dtPanel 顯示，並縮排 dlg 高度
         deadlineCheck.addActionListener(e -> {
             boolean on = deadlineCheck.isSelected();
             dtPanel.setVisible(on);
@@ -453,7 +416,6 @@ public class TodoPanel extends JPanel {
             dlg.setSize(400, dlg.getPreferredSize().height);
         });
 
-        // ── 底部按鈕列 ──
         JPanel btnRow = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 10));
         btnRow.setBackground(new Color(0xFAF9F7));
         btnRow.setOpaque(true);
@@ -500,14 +462,12 @@ public class TodoPanel extends JPanel {
                 titleField.requestFocus();
                 return;
             }
-
             String reminder = null;
             if (deadlineCheck.isSelected()) {
                 reminder = String.format("%04d-%02d-%02d %02d:%02d",
                     selDate[0].getYear(), selDate[0].getMonthValue(), selDate[0].getDayOfMonth(),
                     selTime[0], selTime[1]);
             }
-
             if (isEdit) {
                 editItem.setTitle(titleVal);
                 editItem.setDescription(descArea.getText().trim());
@@ -520,7 +480,6 @@ public class TodoPanel extends JPanel {
                         descArea.getText().trim(), reminder);
                 todos.add(item);
             }
-
             dlg.dispose();
             refreshList();
             saveCallback.run();
@@ -547,8 +506,7 @@ public class TodoPanel extends JPanel {
     // ── 更新清單顯示 ──────────────────────────────────────────────────────────
     public void refreshList() {
         todos.sort((a, b) -> {
-            if (a.isCompleted() != b.isCompleted())
-                return a.isCompleted() ? 1 : -1;
+            if (a.isCompleted() != b.isCompleted()) return a.isCompleted() ? 1 : -1;
             String ta = a.getReminderTime(), tb = b.getReminderTime();
             if (ta == null && tb == null) return 0;
             if (ta == null) return 1;
@@ -557,10 +515,8 @@ public class TodoPanel extends JPanel {
         });
 
         listContainer.removeAll();
-        for (int i = 0; i < todos.size(); i++) {
-            listContainer.add(buildItemRow(todos.get(i), i));
-        }
-        // 空狀態提示
+        for (int i = 0; i < todos.size(); i++) listContainer.add(buildItemRow(todos.get(i), i));
+
         if (todos.isEmpty()) {
             JLabel empty = new JLabel("目前沒有代辦事項，點擊右上角新增吧！", SwingConstants.CENTER);
             empty.setFont(AppFonts.BODY_SMALL);
@@ -606,7 +562,6 @@ public class TodoPanel extends JPanel {
         return b;
     }
 
-    // ── Helpers ───────────────────────────────────────────────────────────────
     private JPanel fieldRow(String labelText, JComponent comp) {
         JPanel row = new JPanel(new BorderLayout(8, 0));
         row.setOpaque(false);
@@ -618,13 +573,5 @@ public class TodoPanel extends JPanel {
         row.add(lbl,  BorderLayout.WEST);
         row.add(comp, BorderLayout.CENTER);
         return row;
-    }
-
-    private JPanel leftAlign(JComponent comp) {
-        JPanel p = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
-        p.setOpaque(false);
-        p.setMaximumSize(new Dimension(Integer.MAX_VALUE, Integer.MAX_VALUE));
-        p.add(comp);
-        return p;
     }
 }
