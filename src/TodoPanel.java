@@ -562,16 +562,4 @@ public class TodoPanel extends JPanel {
         return b;
     }
 
-    private JPanel fieldRow(String labelText, JComponent comp) {
-        JPanel row = new JPanel(new BorderLayout(8, 0));
-        row.setOpaque(false);
-        row.setMaximumSize(new Dimension(Integer.MAX_VALUE, Integer.MAX_VALUE));
-        JLabel lbl = new JLabel(labelText);
-        lbl.setFont(AppFonts.BODY_SMALL);
-        lbl.setForeground(AppColors.TEXT_SECONDARY);
-        lbl.setPreferredSize(new Dimension(36, 0));
-        row.add(lbl,  BorderLayout.WEST);
-        row.add(comp, BorderLayout.CENTER);
-        return row;
-    }
 }

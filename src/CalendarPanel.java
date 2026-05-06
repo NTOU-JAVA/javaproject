@@ -495,10 +495,6 @@ public class CalendarPanel extends JPanel {
             return b;
         }
 
-        private static String escHtml(String s) {
-            return s.replace("&","&amp;").replace("<","&lt;").replace(">","&gt;");
-        }
-
         @Override
         protected void paintComponent(Graphics g) {
             Graphics2D g2 = (Graphics2D) g.create();
@@ -763,27 +759,6 @@ public class CalendarPanel extends JPanel {
         return l;
     }
 
-    private JPanel fieldRow(String labelText, JComponent comp) {
-        JPanel row = new JPanel(new BorderLayout(8, 0));
-        row.setOpaque(false);
-        row.setMaximumSize(new Dimension(Integer.MAX_VALUE, Integer.MAX_VALUE));
-        JLabel lbl = new JLabel(labelText);
-        lbl.setFont(AppFonts.BODY_SMALL);
-        lbl.setForeground(AppColors.TEXT_SECONDARY);
-        lbl.setPreferredSize(new Dimension(36, 0));
-        row.add(lbl,  BorderLayout.WEST);
-        row.add(comp, BorderLayout.CENTER);
-        return row;
-    }
-
-    private JPanel leftAlign(JComponent comp) {
-        JPanel p = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
-        p.setOpaque(false);
-        p.setMaximumSize(new Dimension(Integer.MAX_VALUE, Integer.MAX_VALUE));
-        p.add(comp);
-        return p;
-    }
-
     private JButton pickerBtn(String text) {
         JButton b = new JButton(text);
         b.setFont(AppFonts.BODY_SMALL);
@@ -860,9 +835,7 @@ public class CalendarPanel extends JPanel {
         return String.format("#%02X%02X%02X", c.getRed(), c.getGreen(), c.getBlue());
     }
 
-    private static String escHtml(String s) {
-        return s.replace("&","&amp;").replace("<","&lt;").replace(">","&gt;");
-    }
+    
 
     // ── Reminder ──────────────────────────────────────────────────────────────
     private void scanReminders() {
