@@ -75,6 +75,7 @@ public class TodoPanel extends JPanel {
     private JScrollPane buildListArea() {
         listContainer.setBackground(AppColors.BG_PRIMARY);
 
+        // wrapper 用 BorderLayout + NORTH，讓 listContainer 不被拉伸高度
         JPanel wrapper = new JPanel(new BorderLayout());
         wrapper.setBackground(AppColors.BG_PRIMARY);
         wrapper.add(listContainer, BorderLayout.NORTH);
@@ -84,6 +85,21 @@ public class TodoPanel extends JPanel {
         sp.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
         sp.getViewport().setBackground(AppColors.BG_PRIMARY);
         AppUIManager.applySlimScrollBar(sp);
+
+        // 關鍵：viewport 寬度變化時強制所有 row 寬度跟著更新
+        sp.getViewport().addComponentListener(new ComponentAdapter() {
+            @Override public void componentResized(ComponentEvent e) {
+                int vpW = sp.getViewport().getWidth();
+                if (vpW <= 0) return;
+                for (Component c : listContainer.getComponents()) {
+                    Dimension ps = c.getPreferredSize();
+                    c.setPreferredSize(new Dimension(vpW, ps.height));
+                }
+                listContainer.revalidate();
+                listContainer.repaint();
+            }
+        });
+
         return sp;
     }
 
@@ -111,7 +127,7 @@ public class TodoPanel extends JPanel {
         row.setOpaque(true);
         row.setBackground(rowIndex % 2 == 0 ? AppColors.BG_PRIMARY : new Color(0xFBFBF9));
         row.setMinimumSize(new Dimension(0, 52));
-        row.setMaximumSize(new Dimension(Integer.MAX_VALUE, Integer.MAX_VALUE));
+        row.setAlignmentX(Component.LEFT_ALIGNMENT);
 
         // 左側：可點擊的圓圈
         JLabel circle = new JLabel(item.isCompleted() ? "✔" : "○", SwingConstants.CENTER);
@@ -527,6 +543,22 @@ public class TodoPanel extends JPanel {
         }
         listContainer.revalidate();
         listContainer.repaint();
+
+        // 確保每一列寬度與 viewport 同步（解決 RWD 跑版問題）
+        SwingUtilities.invokeLater(() -> {
+            Container vp = listContainer.getParent(); // wrapper
+            if (vp != null && vp.getParent() instanceof JViewport) {
+                int vpW = ((JViewport) vp.getParent()).getWidth();
+                if (vpW > 0) {
+                    for (Component c : listContainer.getComponents()) {
+                        Dimension ps = c.getPreferredSize();
+                        c.setPreferredSize(new Dimension(vpW, ps.height));
+                    }
+                    listContainer.revalidate();
+                    listContainer.repaint();
+                }
+            }
+        });
     }
 
     // ── Reminder ──────────────────────────────────────────────────────────────

@@ -3,16 +3,18 @@
  */
 public class Course {
     private int    id;
-    private String name;        // 課程名稱（必填）
-    private String code;        // 課代號
-    private String location;    // 教室
-    private String professor;   // 教授名稱
-    private String department;  // 開課系所
-    private String classYear;   // 開課年班
-    private int    dayOfWeek;   // 1=週一 … 5=週五
-    private int    startPeriod; // 開始節次 1~14
-    private int    endPeriod;   // 結束節次 1~14
-    private String note;        // 備註
+    private String name;           // 課程名稱（必填）
+    private String code;           // 課代號
+    private String location;       // 教室
+    private String professor;      // 教授名稱
+    private String department;     // 開課系所
+    private String classYear;      // 開課年班
+    private int    dayOfWeek;      // 1=週一 … 5=週五
+    private int    startPeriod;    // 開始節次 1~14
+    private int    endPeriod;      // 結束節次 1~14
+    private String note;           // 備註
+    private int    colorIndex = -1;        // 課程卡背景色索引（-1 = 自動）
+    private String scheduleString  = "";   // 多時段字串，如 "星期一 第1～2節;星期三 第3～4節"
 
     public Course() {}
 
@@ -44,24 +46,30 @@ public class Course {
     public String getLocation()                { return location != null ? location : ""; }
     public void   setLocation(String location) { this.location = location; }
 
-    public String getProfessor()                       { return professor != null ? professor : ""; }
-    public void   setProfessor(String professor)       { this.professor = professor; }
+    public String getProfessor()                   { return professor != null ? professor : ""; }
+    public void   setProfessor(String professor)   { this.professor = professor; }
 
-    public String getDepartment()                      { return department != null ? department : ""; }
-    public void   setDepartment(String department)     { this.department = department; }
+    public String getDepartment()                  { return department != null ? department : ""; }
+    public void   setDepartment(String department) { this.department = department; }
 
-    public String getClassYear()                       { return classYear != null ? classYear : ""; }
-    public void   setClassYear(String classYear)       { this.classYear = classYear; }
+    public String getClassYear()                   { return classYear != null ? classYear : ""; }
+    public void   setClassYear(String classYear)   { this.classYear = classYear; }
 
     public int    getDayOfWeek()               { return dayOfWeek; }
     public void   setDayOfWeek(int dayOfWeek)  { this.dayOfWeek = dayOfWeek; }
 
-    public int    getStartPeriod()                     { return startPeriod; }
-    public void   setStartPeriod(int startPeriod)      { this.startPeriod = startPeriod; }
+    public int    getStartPeriod()                 { return startPeriod; }
+    public void   setStartPeriod(int startPeriod)  { this.startPeriod = startPeriod; }
 
-    public int    getEndPeriod()                       { return endPeriod; }
-    public void   setEndPeriod(int endPeriod)          { this.endPeriod = endPeriod; }
+    public int    getEndPeriod()                   { return endPeriod; }
+    public void   setEndPeriod(int endPeriod)      { this.endPeriod = endPeriod; }
 
     public String getNote()                    { return note != null ? note : ""; }
     public void   setNote(String note)         { this.note = note; }
+
+    public int    getColorIndex()                  { return colorIndex; }
+    public void   setColorIndex(int colorIndex)    { this.colorIndex = colorIndex; }
+
+    public String getScheduleString()                      { return scheduleString != null ? scheduleString : ""; }
+    public void   setScheduleString(String scheduleString) { this.scheduleString = scheduleString; }
 }

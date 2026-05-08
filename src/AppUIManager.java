@@ -21,14 +21,20 @@ public class AppUIManager {
     // 1.  細線 ScrollBar
     // ══════════════════════════════════════════════════════════
 
-    /** 套用細線 scrollbar 至 JScrollPane */
+    /** 套用細線 scrollbar 至 JScrollPane（null-safe，避免 HORIZONTAL_SCROLLBAR_NEVER 時的 NPE） */
     public static void applySlimScrollBar(JScrollPane sp) {
-        sp.getVerticalScrollBar().setUI(new SlimScrollBarUI());
-        sp.getHorizontalScrollBar().setUI(new SlimScrollBarUI());
-        sp.getVerticalScrollBar().setPreferredSize(new Dimension(6, 0));
-        sp.getHorizontalScrollBar().setPreferredSize(new Dimension(0, 6));
-        sp.getVerticalScrollBar().setOpaque(false);
-        sp.getHorizontalScrollBar().setOpaque(false);
+        JScrollBar vBar = sp.getVerticalScrollBar();
+        JScrollBar hBar = sp.getHorizontalScrollBar();
+        if (vBar != null) {
+            vBar.setUI(new SlimScrollBarUI());
+            vBar.setPreferredSize(new Dimension(6, 0));
+            vBar.setOpaque(false);
+        }
+        if (hBar != null) {
+            hBar.setUI(new SlimScrollBarUI());
+            hBar.setPreferredSize(new Dimension(0, 6));
+            hBar.setOpaque(false);
+        }
     }
 
     static class SlimScrollBarUI extends BasicScrollBarUI {

@@ -26,6 +26,7 @@ public class CalendarPanel extends JPanel {
     private final Set<Integer>      remindedIds = new HashSet<>();
 
     private TaskPopover currentPopover = null;
+    private ComponentListener windowResizeListener = null; // 監聽視窗大小變化用
 
     public CalendarPanel(List<Task> tasks) {
         this.tasks = tasks;
@@ -46,6 +47,27 @@ public class CalendarPanel extends JPanel {
         reminderTimer = new javax.swing.Timer(60_000, e -> scanReminders());
         reminderTimer.setInitialDelay(0);
         reminderTimer.start();
+    }
+
+    // 加入視窗時開始監聽 resize → 關閉懸浮窗
+    @Override public void addNotify() {
+        super.addNotify();
+        Window w = SwingUtilities.getWindowAncestor(this);
+        if (w != null) {
+            windowResizeListener = new ComponentAdapter() {
+                @Override public void componentResized(ComponentEvent e) { closePopover(); }
+            };
+            w.addComponentListener(windowResizeListener);
+        }
+    }
+
+    @Override public void removeNotify() {
+        Window w = SwingUtilities.getWindowAncestor(this);
+        if (w != null && windowResizeListener != null) {
+            w.removeComponentListener(windowResizeListener);
+            windowResizeListener = null;
+        }
+        super.removeNotify();
     }
 
     // ── 頂部週切換列 ──────────────────────────────────────────────────────────
