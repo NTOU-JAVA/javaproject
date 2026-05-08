@@ -9,6 +9,7 @@ import java.util.*;
 /**
  * CategoryManager：管理任務與代辦事項的分類。
  * 資料存在 data/categories.xml，首次啟動時自動建立預設分類。
+ * 預設四個分類（學習、作業、考試、個人）受保護，不可重新命名或刪除。
  */
 public class CategoryManager {
 
@@ -17,14 +18,23 @@ public class CategoryManager {
 
     private static final String XML_PATH = "data/categories.xml";
 
+    static final List<String> PROTECTED_CATEGORIES =
+            Collections.unmodifiableList(Arrays.asList("學習", "作業", "考試", "個人"));
+
     private static final List<String> DEFAULT_CATEGORIES =
-            Arrays.asList("作業", "考試", "活動", "其他");
+            new ArrayList<>(PROTECTED_CATEGORIES);
 
     // 實際儲存的分類（不含「全部」）
     private final List<String> categories = new ArrayList<>();
 
     // 觀察者（分類更動時通知 UI）
     private final List<Runnable> listeners = new ArrayList<>();
+
+    // 刪除分類時通知（傳入被刪除的分類名稱）
+    private final List<java.util.function.Consumer<String>> removeListeners = new ArrayList<>();
+
+    // 重新命名分類時通知（傳入 oldName→newName）
+    private final List<java.util.function.BiConsumer<String,String>> renameListeners = new ArrayList<>();
 
     public CategoryManager() {
         load();
@@ -49,9 +59,14 @@ public class CategoryManager {
                     categories.add(name);
                 }
             }
+            // 確保受保護分類一定存在（位置固定在最前面）
+            for (int i = PROTECTED_CATEGORIES.size() - 1; i >= 0; i--) {
+                String p = PROTECTED_CATEGORIES.get(i);
+                categories.remove(p);
+                categories.add(0, p);
+            }
         } catch (Exception e) {
             e.printStackTrace();
-            // 讀取失敗就用預設
             if (categories.isEmpty()) categories.addAll(DEFAULT_CATEGORIES);
         }
     }
@@ -92,6 +107,11 @@ public class CategoryManager {
         return opts;
     }
 
+    /** 判斷某分類是否受保護（不可刪除 / 重新命名） */
+    public boolean isProtected(String name) {
+        return PROTECTED_CATEGORIES.contains(name);
+    }
+
     // ── 新增 ─────────────────────────────────────────────────────────────────
     public boolean addCategory(String name) {
         name = name.trim();
@@ -102,21 +122,25 @@ public class CategoryManager {
         return true;
     }
 
-    // ── 刪除 ─────────────────────────────────────────────────────────────────
+    // ── 刪除（受保護分類不可刪） ──────────────────────────────────────────────
     public boolean removeCategory(String name) {
+        if (isProtected(name)) return false;
         if (!categories.remove(name)) return false;
         save();
+        for (java.util.function.Consumer<String> c : removeListeners) c.accept(name);
         notifyListeners();
         return true;
     }
 
-    // ── 重新命名 ──────────────────────────────────────────────────────────────
+    // ── 重新命名（受保護分類不可改） ──────────────────────────────────────────
     public boolean renameCategory(String oldName, String newName) {
+        if (isProtected(oldName)) return false;
         newName = newName.trim();
         int idx = categories.indexOf(oldName);
         if (idx < 0 || newName.isEmpty() || categories.contains(newName)) return false;
         categories.set(idx, newName);
         save();
+        for (java.util.function.BiConsumer<String,String> c : renameListeners) c.accept(oldName, newName);
         notifyListeners();
         return true;
     }
@@ -124,6 +148,12 @@ public class CategoryManager {
     // ── 觀察者 ───────────────────────────────────────────────────────────────
     public void addListener(Runnable r)    { listeners.add(r); }
     public void removeListener(Runnable r) { listeners.remove(r); }
+
+    /** 當某分類被刪除時呼叫，傳入被刪除的分類名稱（供清空事項分類欄使用）。 */
+    public void addRemoveListener(java.util.function.Consumer<String> c) { removeListeners.add(c); }
+
+    /** 當某分類被重新命名時呼叫，傳入 (oldName, newName)。 */
+    public void addRenameListener(java.util.function.BiConsumer<String,String> c) { renameListeners.add(c); }
 
     private void notifyListeners() {
         for (Runnable r : listeners) r.run();

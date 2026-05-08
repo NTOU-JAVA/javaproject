@@ -50,6 +50,32 @@ public class TodoPanel extends JPanel {
         reminderTimer.setInitialDelay(0);
         reminderTimer.start();
 
+        // 分類刪除時，清空所有有此分類的代辦事項的分類欄位
+        categoryManager.addRemoveListener(deletedCat -> {
+            for (TodoItem t : todos) {
+                if (deletedCat.equals(t.getCategory())) {
+                    t.setCategory("");
+                }
+            }
+            saveCallback.run();
+        });
+
+        // 分類重新命名時，同步更新事項的分類欄位與目前篩選器
+        categoryManager.addRenameListener((oldName, newName) -> {
+            for (TodoItem t : todos) {
+                if (oldName.equals(t.getCategory())) {
+                    t.setCategory(newName);
+                }
+            }
+            if (oldName.equals(currentFilter)) {
+                currentFilter = newName;
+            }
+            saveCallback.run();
+        });
+
+        // 分類清單變動時刷新清單顯示
+        categoryManager.addListener(this::refreshList);
+
         refreshList();
     }
 

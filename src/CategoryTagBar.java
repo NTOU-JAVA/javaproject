@@ -8,14 +8,15 @@ import java.util.function.Consumer;
 /**
  * CategoryTagBar：頂部分類 Tag 篩選列。
  * 點擊 Tag 切換篩選，右側「管理」按鈕開啟分類管理 Dialog。
+ * 受保護分類不顯示刪除／重新命名按鈕。
+ * 重新命名使用 [原名稱] → [新名稱] 格式 Dialog。
  */
 public class CategoryTagBar extends JPanel {
 
     private final CategoryManager categoryManager;
-    private final Consumer<String> onFilterChanged; // 回調：當前選取的分類名稱（或 ALL）
+    private final Consumer<String> onFilterChanged;
     private String selectedCategory = CategoryManager.ALL;
 
-    // Tag 列容器
     private final JPanel tagRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 4));
 
     public CategoryTagBar(CategoryManager categoryManager, Consumer<String> onFilterChanged) {
@@ -29,20 +30,42 @@ public class CategoryTagBar extends JPanel {
         tagRow.setOpaque(false);
         tagRow.setBorder(new EmptyBorder(0, 10, 0, 0));
 
-        JButton manageBtn = new JButton("管理分類");
+        JButton manageBtn = new JButton("管理分類") {
+            private boolean hovered = false;
+            {
+                addMouseListener(new MouseAdapter() {
+                    @Override public void mouseEntered(MouseEvent e) { hovered = true;  setForeground(Color.WHITE); repaint(); }
+                    @Override public void mouseExited(MouseEvent e)  { hovered = false; setForeground(AppColors.ACCENT); repaint(); }
+                });
+            }
+            @Override protected void paintComponent(Graphics g) {
+                Graphics2D g2 = (Graphics2D) g.create();
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                Color bg = hovered ? AppColors.ACCENT : AppColors.ACCENT_LIGHT;
+                g2.setColor(bg);
+                g2.fillRoundRect(0, 0, getWidth(), getHeight(), getHeight(), getHeight());
+                g2.dispose();
+                super.paintComponent(g);
+            }
+        };
         manageBtn.setFont(AppFonts.CAPTION);
-        manageBtn.setForeground(AppColors.TEXT_TERTIARY);
-        manageBtn.setBackground(AppColors.BG_SECONDARY);
-        manageBtn.setBorder(new EmptyBorder(4, 10, 4, 12));
+        manageBtn.setForeground(AppColors.ACCENT);
+        manageBtn.setBorder(new EmptyBorder(3, 10, 3, 10));
         manageBtn.setFocusPainted(false);
         manageBtn.setContentAreaFilled(false);
+        manageBtn.setOpaque(false);
         manageBtn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
         manageBtn.addActionListener(e -> openManageDialog());
 
-        add(tagRow,    BorderLayout.CENTER);
-        add(manageBtn, BorderLayout.EAST);
+        // 包在一個帶右邊距的容器裡
+        JPanel manageBtnWrapper = new JPanel(new FlowLayout(FlowLayout.CENTER, 0, 4));
+        manageBtnWrapper.setOpaque(false);
+        manageBtnWrapper.setBorder(new EmptyBorder(0, 0, 0, 10));
+        manageBtnWrapper.add(manageBtn);
 
-        // 當分類變動時自動重建 Tag 列
+        add(tagRow,          BorderLayout.CENTER);
+        add(manageBtnWrapper, BorderLayout.EAST);
+
         categoryManager.addListener(this::rebuildTags);
         rebuildTags();
     }
@@ -52,7 +75,6 @@ public class CategoryTagBar extends JPanel {
         tagRow.removeAll();
         List<String> opts = categoryManager.getAllOptions();
 
-        // 若目前選取的分類已被刪除，退回「全部」
         if (!opts.contains(selectedCategory)) {
             selectedCategory = CategoryManager.ALL;
             onFilterChanged.accept(selectedCategory);
@@ -109,7 +131,6 @@ public class CategoryTagBar extends JPanel {
         return tag;
     }
 
-    /** 取得目前選取的分類 */
     public String getSelectedCategory() { return selectedCategory; }
 
     // ── 管理 Dialog ────────────────────────────────────────────────────────
@@ -120,7 +141,6 @@ public class CategoryTagBar extends JPanel {
         dlg.setLayout(new BorderLayout());
         dlg.setBackground(new Color(0xF0F0F0));
 
-        // ── 浮動視窗風格（與其他 dialog 一致） ──
         JPanel root = new JPanel(new BorderLayout()) {
             @Override protected void paintComponent(Graphics g) {
                 Graphics2D g2 = (Graphics2D) g.create();
@@ -191,8 +211,9 @@ public class CategoryTagBar extends JPanel {
         JScrollPane listScroll = new JScrollPane(listPanel,
                 JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED,
                 JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
-        listScroll.setBorder(new MatteBorder(1,0,1,0, AppColors.BORDER_DEFAULT));
+        listScroll.setBorder(new MatteBorder(1,1,1,0, AppColors.BORDER_DEFAULT));
         listScroll.setPreferredSize(new Dimension(0, Math.min(listPanel.getPreferredSize().height + 8, 240)));
+        listScroll.getVerticalScrollBar().setUnitIncrement(16);
         AppUIManager.applySlimScrollBar(listScroll);
 
         // 新增分類輸入列
@@ -240,18 +261,8 @@ public class CategoryTagBar extends JPanel {
         content.add(listScroll, BorderLayout.CENTER);
         content.add(addRow,     BorderLayout.SOUTH);
 
-        // 底部提示
-        JPanel hint = new JPanel(new FlowLayout(FlowLayout.LEFT, 16, 6));
-        hint.setBackground(new Color(0xFAF9F7));
-        hint.setBorder(new MatteBorder(1,0,0,0, AppColors.BORDER_DEFAULT));
-        JLabel hintLbl = new JLabel("點擊分類名稱可重新命名");
-        hintLbl.setFont(AppFonts.CAPTION);
-        hintLbl.setForeground(AppColors.TEXT_TERTIARY);
-        hint.add(hintLbl);
-
         root.add(header,  BorderLayout.NORTH);
         root.add(content, BorderLayout.CENTER);
-        root.add(hint,    BorderLayout.SOUTH);
 
         dlg.pack();
         dlg.setSize(340 + 7, dlg.getPreferredSize().height);
@@ -261,6 +272,8 @@ public class CategoryTagBar extends JPanel {
 
     /** 管理 Dialog 裡每一列分類 */
     private JPanel buildCategoryRow(String cat, Runnable refreshList, JDialog dlg) {
+        boolean isProtected = categoryManager.isProtected(cat);
+
         JPanel row = new JPanel(new BorderLayout(0,0)) {
             @Override protected void paintComponent(Graphics g) {
                 super.paintComponent(g);
@@ -274,49 +287,254 @@ public class CategoryTagBar extends JPanel {
         row.setPreferredSize(new Dimension(0, 44));
         row.setMaximumSize(new Dimension(Integer.MAX_VALUE, 44));
 
-        // 分類名稱（可雙擊編輯）
+        // 分類名稱
         JLabel nameLbl = new JLabel(cat);
         nameLbl.setFont(AppFonts.BODY_SMALL);
-        nameLbl.setForeground(AppColors.TEXT_PRIMARY);
+        nameLbl.setForeground(isProtected ? AppColors.TEXT_SECONDARY : AppColors.TEXT_PRIMARY);
 
-        // 右側按鈕
-        JButton delBtn = new JButton("刪除");
-        delBtn.setFont(AppFonts.CAPTION);
-        delBtn.setForeground(AppColors.DANGER);
-        delBtn.setBackground(AppColors.DANGER_LIGHT);
-        delBtn.setBorder(new EmptyBorder(3,8,3,8));
-        delBtn.setFocusPainted(false);
-        delBtn.setOpaque(true);
-        delBtn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-        delBtn.addActionListener(e -> {
-            int result = JOptionPane.showConfirmDialog(dlg,
-                "刪除「" + cat + "」分類？\n（現有標記此分類的事項不會被刪除，分類欄位將清空）",
-                "確認刪除", JOptionPane.YES_NO_OPTION);
-            if (result == JOptionPane.YES_OPTION) {
+        // 受保護標記
+        if (isProtected) {
+            JLabel lockLbl = new JLabel("  預設");
+            lockLbl.setFont(AppFonts.CAPTION);
+            lockLbl.setForeground(AppColors.TEXT_TERTIARY);
+            JPanel nameRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
+            nameRow.setOpaque(false);
+            nameRow.add(nameLbl);
+            nameRow.add(lockLbl);
+            row.add(nameRow, BorderLayout.CENTER);
+        } else {
+            row.add(nameLbl, BorderLayout.CENTER);
+        }
+
+        // 右側按鈕（僅非受保護分類顯示）
+        if (!isProtected) {
+            JButton renameBtn = new JButton("重新命名");
+            renameBtn.setFont(AppFonts.CAPTION);
+            renameBtn.setForeground(AppColors.ACCENT);
+            renameBtn.setBackground(AppColors.ACCENT_LIGHT);
+            renameBtn.setBorder(new EmptyBorder(3,8,3,8));
+            renameBtn.setFocusPainted(false);
+            renameBtn.setOpaque(true);
+            renameBtn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+            renameBtn.addActionListener(e -> openRenameDialog(cat, refreshList, dlg));
+
+            JButton delBtn = new JButton("刪除");
+            delBtn.setFont(AppFonts.CAPTION);
+            delBtn.setForeground(AppColors.DANGER);
+            delBtn.setBackground(AppColors.DANGER_LIGHT);
+            delBtn.setBorder(new EmptyBorder(3,8,3,8));
+            delBtn.setFocusPainted(false);
+            delBtn.setOpaque(true);
+            delBtn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+
+            // 行內確認按鈕（預設隱藏）
+            JButton cancelDelBtn = new JButton("取消");
+            cancelDelBtn.setFont(AppFonts.CAPTION);
+            cancelDelBtn.setForeground(AppColors.TEXT_SECONDARY);
+            cancelDelBtn.setBackground(AppColors.BG_TERTIARY);
+            cancelDelBtn.setBorder(new EmptyBorder(3,8,3,8));
+            cancelDelBtn.setFocusPainted(false);
+            cancelDelBtn.setOpaque(true);
+            cancelDelBtn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+            cancelDelBtn.setVisible(false);
+
+            JButton confirmDelBtn = new JButton("確認刪除");
+            confirmDelBtn.setFont(AppFonts.CAPTION);
+            confirmDelBtn.setForeground(Color.WHITE);
+            confirmDelBtn.setBackground(AppColors.DANGER);
+            confirmDelBtn.setBorder(new EmptyBorder(3,8,3,8));
+            confirmDelBtn.setFocusPainted(false);
+            confirmDelBtn.setOpaque(true);
+            confirmDelBtn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+            confirmDelBtn.setVisible(false);
+
+            delBtn.addActionListener(e -> {
+                delBtn.setVisible(false);
+                renameBtn.setVisible(false);
+                cancelDelBtn.setVisible(true);
+                confirmDelBtn.setVisible(true);
+            });
+
+            cancelDelBtn.addActionListener(e -> {
+                cancelDelBtn.setVisible(false);
+                confirmDelBtn.setVisible(false);
+                delBtn.setVisible(true);
+                renameBtn.setVisible(true);
+            });
+
+            confirmDelBtn.addActionListener(e -> {
                 categoryManager.removeCategory(cat);
                 refreshList.run();
-            }
-        });
+            });
 
-        JPanel btnArea = new JPanel(new FlowLayout(FlowLayout.RIGHT, 4, 8));
-        btnArea.setOpaque(false);
-        btnArea.add(delBtn);
+            JPanel btnArea = new JPanel(new FlowLayout(FlowLayout.RIGHT, 4, 8));
+            btnArea.setOpaque(false);
+            btnArea.add(renameBtn);
+            btnArea.add(delBtn);
+            btnArea.add(cancelDelBtn);
+            btnArea.add(confirmDelBtn);
+            row.add(btnArea, BorderLayout.EAST);
+        }
 
-        // 雙擊重新命名
-        nameLbl.addMouseListener(new MouseAdapter() {
-            @Override public void mouseClicked(MouseEvent e) {
-                if (e.getClickCount() == 2) {
-                    String newName = JOptionPane.showInputDialog(dlg, "重新命名分類：", cat);
-                    if (newName != null && !newName.isBlank()) {
-                        categoryManager.renameCategory(cat, newName.trim());
-                        refreshList.run();
-                    }
-                }
-            }
-        });
-
-        row.add(nameLbl, BorderLayout.CENTER);
-        row.add(btnArea, BorderLayout.EAST);
         return row;
+    }
+
+    /**
+     * 重新命名 Dialog：顯示原名稱（唯讀）與新名稱輸入欄。
+     */
+    private void openRenameDialog(String oldName, Runnable refreshList, JDialog parentDlg) {
+        Window owner = SwingUtilities.getWindowAncestor(parentDlg);
+        JDialog renameDlg = new JDialog(owner, "重新命名分類", Dialog.ModalityType.APPLICATION_MODAL);
+        renameDlg.setUndecorated(true);
+        renameDlg.setLayout(new BorderLayout());
+        renameDlg.setBackground(new Color(0xF0F0F0));
+
+        JPanel root = new JPanel(new BorderLayout()) {
+            @Override protected void paintComponent(Graphics g) {
+                Graphics2D g2 = (Graphics2D) g.create();
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                g2.setColor(new Color(0xF0F0F0));
+                g2.fillRect(0, 0, getWidth(), getHeight());
+                int W = getWidth()-7, H = getHeight()-7, R = 14;
+                for (int i = 4; i >= 1; i--) {
+                    g2.setColor(new Color(0,0,0, 7*i));
+                    g2.fillRoundRect(i+1, i+2, getWidth()-i*2-1, getHeight()-i*2-1, R, R);
+                }
+                g2.setColor(Color.WHITE);
+                g2.fillRoundRect(0, 0, W, H, R, R);
+                Component comp = getComponentCount() > 0 ? getComponent(0) : null;
+                if (comp != null) {
+                    g2.setColor(AppColors.ACCENT_LIGHT);
+                    g2.fillRoundRect(0, 0, W, R + comp.getHeight(), R, R);
+                    g2.fillRect(0, R, W, comp.getHeight()-R);
+                }
+                g2.setColor(AppColors.BORDER_HOVER);
+                g2.setStroke(new java.awt.BasicStroke(1.5f));
+                g2.drawRoundRect(0, 0, W-1, H-1, R, R);
+                g2.dispose();
+            }
+        };
+        root.setOpaque(false);
+        root.setBorder(new EmptyBorder(0,0,7,7));
+        renameDlg.add(root);
+
+        // Header
+        JPanel header = new JPanel(new BorderLayout());
+        header.setOpaque(false);
+        header.setBorder(new EmptyBorder(12,16,12,10));
+        JLabel titleLbl = new JLabel("重新命名分類");
+        titleLbl.setFont(AppFonts.TITLE_SMALL);
+        titleLbl.setForeground(AppColors.ACCENT);
+        JButton xBtn = new JButton("×");
+        xBtn.setFont(new Font(AppFonts.BODY_MEDIUM.getFamily(), Font.PLAIN, 16));
+        xBtn.setForeground(AppColors.TEXT_TERTIARY);
+        xBtn.setBorder(new EmptyBorder(0,8,0,4));
+        xBtn.setFocusPainted(false);
+        xBtn.setContentAreaFilled(false);
+        xBtn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        xBtn.addActionListener(e -> renameDlg.dispose());
+        header.add(titleLbl, BorderLayout.CENTER);
+        header.add(xBtn,     BorderLayout.EAST);
+
+        // Content：原名稱（唯讀）+ 新名稱（可輸入）
+        JPanel content = new JPanel(new GridBagLayout());
+        content.setOpaque(false);
+        content.setBorder(new EmptyBorder(14,16,10,16));
+        GridBagConstraints gc = new GridBagConstraints();
+        gc.gridx = 0; gc.weightx = 1.0;
+        gc.fill = GridBagConstraints.HORIZONTAL;
+        gc.anchor = GridBagConstraints.WEST;
+
+        // 原名稱（唯讀欄位）
+        gc.gridy = 0; gc.insets = new Insets(0,0,4,0);
+        content.add(renameFieldLabel("原名稱"), gc);
+        gc.gridy = 1; gc.insets = new Insets(0,0,12,0);
+        JTextField oldField = new JTextField(oldName);
+        oldField.setFont(AppFonts.BODY_MEDIUM);
+        oldField.setEditable(false);
+        oldField.setFocusable(false);
+        oldField.setBackground(AppColors.BG_TERTIARY);
+        oldField.setForeground(AppColors.TEXT_SECONDARY);
+        oldField.setBorder(BorderFactory.createCompoundBorder(
+            new LineBorder(AppColors.BORDER_DEFAULT, 1, true),
+            new EmptyBorder(5,8,5,8)));
+        content.add(oldField, gc);
+
+        // 新名稱
+        gc.gridy = 2; gc.insets = new Insets(0,0,4,0);
+        content.add(renameFieldLabel("新名稱"), gc);
+        gc.gridy = 3; gc.insets = new Insets(0,0,0,0);
+        JTextField newField = new JTextField();
+        newField.setFont(AppFonts.BODY_MEDIUM);
+        newField.setBorder(BorderFactory.createCompoundBorder(
+            new LineBorder(AppColors.BORDER_DEFAULT, 1, true),
+            new EmptyBorder(5,8,5,8)));
+        content.add(newField, gc);
+
+        // 底部按鈕
+        JPanel btnRow = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 10));
+        btnRow.setBackground(new Color(0xFAF9F7));
+        btnRow.setOpaque(true);
+        btnRow.setBorder(new MatteBorder(1,0,0,0, AppColors.BORDER_DEFAULT));
+
+        JButton cancelBtn = new JButton("取消");
+        cancelBtn.setFont(AppFonts.BODY_SMALL);
+        cancelBtn.setForeground(AppColors.TEXT_SECONDARY);
+        cancelBtn.setBackground(AppColors.BG_TERTIARY);
+        cancelBtn.setOpaque(true);
+        cancelBtn.setBorder(new EmptyBorder(6,16,6,16));
+        cancelBtn.setFocusPainted(false);
+        cancelBtn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        cancelBtn.addActionListener(e -> renameDlg.dispose());
+
+        JButton okBtn = new JButton("儲存");
+        okBtn.setFont(AppFonts.BODY_SMALL);
+        okBtn.setBackground(AppColors.ACCENT);
+        okBtn.setForeground(Color.WHITE);
+        okBtn.setBorder(new EmptyBorder(6,18,6,18));
+        okBtn.setFocusPainted(false);
+        okBtn.setOpaque(true);
+        okBtn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+
+        Runnable doRename = () -> {
+            String newName = newField.getText().trim();
+            if (newName.isEmpty()) {
+                newField.setBorder(BorderFactory.createCompoundBorder(
+                    new LineBorder(AppColors.DANGER, 1, true),
+                    new EmptyBorder(5,8,5,8)));
+                newField.requestFocus();
+                return;
+            }
+            if (!categoryManager.renameCategory(oldName, newName)) {
+                newField.setBorder(BorderFactory.createCompoundBorder(
+                    new LineBorder(AppColors.DANGER, 1, true),
+                    new EmptyBorder(5,8,5,8)));
+                return;
+            }
+            renameDlg.dispose();
+            refreshList.run();
+        };
+        okBtn.addActionListener(e -> doRename.run());
+        newField.addActionListener(e -> doRename.run());
+        renameDlg.getRootPane().setDefaultButton(okBtn);
+
+        btnRow.add(cancelBtn);
+        btnRow.add(okBtn);
+
+        root.add(header,  BorderLayout.NORTH);
+        root.add(content, BorderLayout.CENTER);
+        root.add(btnRow,  BorderLayout.SOUTH);
+
+        renameDlg.pack();
+        renameDlg.setSize(300 + 7, renameDlg.getPreferredSize().height);
+        renameDlg.setLocationRelativeTo(parentDlg);
+        renameDlg.setVisible(true);
+    }
+
+    private static JLabel renameFieldLabel(String text) {
+        JLabel l = new JLabel(text);
+        l.setFont(AppFonts.BODY_SMALL);
+        l.setForeground(AppColors.TEXT_SECONDARY);
+        return l;
     }
 }

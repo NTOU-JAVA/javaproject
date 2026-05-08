@@ -54,6 +54,17 @@ public class CalendarPanel extends JPanel {
 
         updateCalendar();
 
+        // 分類重新命名時，同步 currentFilter 並刷新
+        categoryManager.addRenameListener((oldName, newName) -> {
+            if (oldName.equals(currentFilter)) {
+                currentFilter = newName;
+            }
+            updateCalendar();
+        });
+
+        // 分類清單變動（新增/刪除）時刷新
+        categoryManager.addListener(this::updateCalendar);
+
         reminderTimer = new javax.swing.Timer(60_000, e -> scanReminders());
         reminderTimer.setInitialDelay(0);
         reminderTimer.start();
@@ -345,7 +356,12 @@ public class CalendarPanel extends JPanel {
 
         Point cardLoc = SwingUtilities.convertPoint(sourceCard, 0, 0, layered);
         int popW = 280;
+
+        // 先給定寬度，讓 JTextArea wrap 後能正確回報 preferredSize
+        currentPopover.setSize(popW, 9999);
+        currentPopover.validate();
         int popH = currentPopover.getPreferredSize().height;
+
         int x    = cardLoc.x + sourceCard.getWidth() + 4;
         int y    = cardLoc.y;
 
@@ -401,7 +417,8 @@ public class CalendarPanel extends JPanel {
             ));
             setOpaque(true);
 
-            JPanel header = new JPanel(new BorderLayout());
+            // ── Header：title 換行自適應，closeBtn 固定右上角 ──
+            JPanel header = new JPanel(new BorderLayout(0, 0));
             header.setBackground(task.isImportant() ? AppColors.DANGER_LIGHT : AppColors.ACCENT_LIGHT);
             header.setBorder(new EmptyBorder(10, 14, 10, 10));
 
@@ -416,17 +433,22 @@ public class CalendarPanel extends JPanel {
             titleLbl.setOpaque(false);
             titleLbl.setBorder(null);
 
-            JButton closeBtn = new JButton("x");
-            closeBtn.setFont(new Font(AppFonts.CAPTION.getFamily(), Font.PLAIN, 11));
+            JButton closeBtn = new JButton("×");
+            closeBtn.setFont(new Font(AppFonts.CAPTION.getFamily(), Font.PLAIN, 13));
             closeBtn.setForeground(AppColors.TEXT_TERTIARY);
-            closeBtn.setBorder(new EmptyBorder(2, 6, 2, 6));
+            closeBtn.setBorder(new EmptyBorder(0, 6, 0, 0));
             closeBtn.setFocusPainted(false);
             closeBtn.setContentAreaFilled(false);
             closeBtn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
             closeBtn.addActionListener(e -> onClose.run());
 
-            header.add(titleLbl, BorderLayout.CENTER);
-            header.add(closeBtn, BorderLayout.EAST);
+            // closeWrapper 讓 X 固定在右上角，不隨 title 增高而垂直置中
+            JPanel closeWrapper = new JPanel(new BorderLayout());
+            closeWrapper.setOpaque(false);
+            closeWrapper.add(closeBtn, BorderLayout.NORTH);
+
+            header.add(titleLbl,     BorderLayout.CENTER);
+            header.add(closeWrapper, BorderLayout.EAST);
 
             JPanel body = new JPanel();
             body.setLayout(new BoxLayout(body, BoxLayout.Y_AXIS));
@@ -500,6 +522,19 @@ public class CalendarPanel extends JPanel {
                 body.add(Box.createRigidArea(new Dimension(0, 6)));
             }
 
+            // 先測量 body 實際高度，決定 scroll 高度（最小 80，最大 180）
+            body.setSize(280 - 2, 9999);
+            body.validate();
+            int bodyH = Math.max(80, Math.min(body.getPreferredSize().height + 8, 180));
+
+            JScrollPane bodyScroll = new JScrollPane(body,
+                    JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED,
+                    JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+            bodyScroll.setBorder(null);
+            bodyScroll.setPreferredSize(new Dimension(0, bodyH));
+            bodyScroll.getVerticalScrollBar().setUnitIncrement(16);
+            AppUIManager.applySlimScrollBar(bodyScroll);
+
             CardLayout btnCard = new CardLayout();
             JPanel btnRow = new JPanel(btnCard);
             btnRow.setBackground(new Color(0xFAF9F7));
@@ -528,9 +563,9 @@ public class CalendarPanel extends JPanel {
             cancelDelBtn.addActionListener(e -> btnCard.show(btnRow, "normal"));
             confirmDelBtn.addActionListener(e -> onDelete.run());
 
-            add(header, BorderLayout.NORTH);
-            add(body,   BorderLayout.CENTER);
-            add(btnRow, BorderLayout.SOUTH);
+            add(header,     BorderLayout.NORTH);
+            add(bodyScroll, BorderLayout.CENTER);
+            add(btnRow,     BorderLayout.SOUTH);
         }
 
         private static JLabel rowLabel(String text) {

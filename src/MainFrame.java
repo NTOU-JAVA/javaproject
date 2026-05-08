@@ -38,6 +38,26 @@ public class MainFrame extends JFrame {
 
         this.saveTodosCallback = saveTodosCallback;
 
+        // 分類刪除時，清空所有 tasks 中有此分類的欄位並存檔
+        categoryManager.addRemoveListener(deletedCat -> {
+            for (Task t : tasks) {
+                if (deletedCat.equals(t.getCategory())) {
+                    t.setCategory("");
+                }
+            }
+            saveTasksCallback.run();
+        });
+
+        // 分類重新命名時，同步更新 tasks 的分類欄位
+        categoryManager.addRenameListener((oldName, newName) -> {
+            for (Task t : tasks) {
+                if (oldName.equals(t.getCategory())) {
+                    t.setCategory(newName);
+                }
+            }
+            saveTasksCallback.run();
+        });
+
         calendarPanel = new CalendarPanel(tasks, categoryManager);
         todoPanel     = new TodoPanel(todos, saveTodosCallback, categoryManager);
         newsPanel     = new SchoolNewsPanel();

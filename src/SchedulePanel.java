@@ -19,6 +19,7 @@ import java.util.List;
  *  - 星期/節次改為多時段區塊設計
  *  - 統一自訂下拉選單樣式
  *  - RWD 響應式修復
+ *  - 重新命名課表 Dialog 改為原名稱（唯讀）＋新名稱格式
  */
 public class SchedulePanel extends JPanel {
 
@@ -64,7 +65,7 @@ public class SchedulePanel extends JPanel {
 
     private JPanel currentPopover = null;
     private boolean comboUpdating = false;
-    private ComponentListener windowResizeListener = null; // 監聽視窗大小變化用
+    private ComponentListener windowResizeListener = null;
 
     public SchedulePanel(List<Schedule> schedules, Runnable saveCallback) {
         this.schedules    = schedules;
@@ -87,7 +88,6 @@ public class SchedulePanel extends JPanel {
         refreshGrid();
     }
 
-    // 加入視窗時開始監聽 resize → 關閉懸浮窗
     @Override public void addNotify() {
         super.addNotify();
         Window w = SwingUtilities.getWindowAncestor(this);
@@ -242,7 +242,6 @@ public class SchedulePanel extends JPanel {
         combo.setUI(new StyledComboBoxUI());
     }
 
-    /** 統一樣式的 ComboBoxUI */
     static class StyledComboBoxUI extends BasicComboBoxUI {
         @Override
         protected JButton createArrowButton() {
@@ -252,7 +251,6 @@ public class SchedulePanel extends JPanel {
                     g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
                     g2.setColor(getBackground());
                     g2.fillRect(0, 0, getWidth(), getHeight());
-                    // 畫向下箭頭
                     int cx = getWidth() / 2;
                     int cy = getHeight() / 2;
                     int[] xp = { cx - 4, cx + 4, cx };
@@ -341,7 +339,7 @@ public class SchedulePanel extends JPanel {
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // 課表格子區（RWD：使用 GridLayout 讓格子跟著縮放）
+    // 課表格子區
     // ══════════════════════════════════════════════════════════════════════════
     private JScrollPane gridScrollPane;
 
@@ -381,10 +379,8 @@ public class SchedulePanel extends JPanel {
         gridScrollPane.getVerticalScrollBar().setUnitIncrement(ROW_HEIGHT);
         AppUIManager.applySlimScrollBar(gridScrollPane);
 
-        // RWD：監聽 viewport 寬度變化，當視窗縮放時重新整理格子讓欄寬跟著回彈
         gridScrollPane.getViewport().addComponentListener(new ComponentAdapter() {
             @Override public void componentResized(ComponentEvent e) {
-                // 只重新 revalidate table 即可，不需要重建整個 grid
                 if (gridPanel.getComponentCount() > 0) {
                     gridPanel.getComponent(0).revalidate();
                     gridPanel.getComponent(0).repaint();
@@ -417,10 +413,8 @@ public class SchedulePanel extends JPanel {
         final int ROWS = PERIOD_TIMES.length;
         final int COLS = DAY_NAMES.length;
 
-        // 使用固定比例的 GridBagLayout + 最大尺寸設定來達成 RWD
         JPanel table = new JPanel(new GridBagLayout()) {
             @Override public Dimension getPreferredSize() {
-                // 撐滿 viewport 寬度
                 if (gridScrollPane != null) {
                     int vpW = gridScrollPane.getViewport().getWidth();
                     if (vpW > 0) {
@@ -452,14 +446,10 @@ public class SchedulePanel extends JPanel {
             table.add(h, gc);
         }
 
-        // 建立所有課程的時段佔用表（包含多時段）
-        // occupiedBy[period][col] = Course（null 表示空白）
-        Course[][] occupiedBy = new Course[ROWS][COLS];
-        // slotStartAt[period][col] = true 表示某課程的某時段從此格開始
+        Course[][] occupiedBy  = new Course[ROWS][COLS];
         boolean[][] slotStartAt = new boolean[ROWS][COLS];
 
         for (Course c : activeSchedule.getCourses()) {
-            // 解析所有時段
             List<int[]> allSlots = new ArrayList<>();
             String schedStr = c.getScheduleString();
             if (schedStr != null && !schedStr.isEmpty()) {
@@ -472,10 +462,10 @@ public class SchedulePanel extends JPanel {
                 allSlots.add(new int[]{ c.getDayOfWeek(), c.getStartPeriod(), c.getEndPeriod() });
             }
             for (int[] slot : allSlots) {
-                int day   = slot[0]; // 1-based
+                int day   = slot[0];
                 int start = slot[1];
                 int end   = slot[2];
-                int col   = day - 1; // 0-based column index
+                int col   = day - 1;
                 if (col < 0 || col >= COLS) continue;
                 if (start < 0 || start >= ROWS) continue;
                 slotStartAt[start][col] = true;
@@ -485,7 +475,6 @@ public class SchedulePanel extends JPanel {
             }
         }
 
-        // 節次列
         boolean[][] rendered = new boolean[ROWS][COLS];
         for (int p = 0; p < ROWS; p++) {
             gc.gridy  = p + 1;
@@ -502,7 +491,6 @@ public class SchedulePanel extends JPanel {
                 Course found = occupiedBy[p][d];
 
                 if (found != null && slotStartAt[p][d]) {
-                    // 計算這個時段的 span
                     int span = 1;
                     while (p + span < ROWS && occupiedBy[p + span][d] == found
                            && !slotStartAt[p + span][d]) {
@@ -517,7 +505,6 @@ public class SchedulePanel extends JPanel {
                     gc.gridheight = 1;
                     table.add(buildEmptyCell(d == 5 || d == 6), gc);
                 } else {
-                    // 被跨格覆蓋中的格子，GridBagLayout 不需要填補
                     rendered[p][d] = true;
                 }
             }
@@ -539,7 +526,7 @@ public class SchedulePanel extends JPanel {
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // 課程卡：課程名稱 → 開課系所 → 開課年班 → 教室
+    // 課程卡
     // ══════════════════════════════════════════════════════════════════════════
     private JPanel buildCourseCard(Course c) {
         int[] ci = getCourseColorIndex(c);
@@ -570,7 +557,6 @@ public class SchedulePanel extends JPanel {
         inner.setLayout(new BoxLayout(inner, BoxLayout.Y_AXIS));
         inner.setOpaque(false);
 
-        // 課程名稱
         JTextArea nameLbl = new JTextArea(c.getName());
         nameLbl.setFont(AppFonts.BODY_SMALL.deriveFont(Font.BOLD));
         nameLbl.setForeground(accColor.darker());
@@ -592,7 +578,6 @@ public class SchedulePanel extends JPanel {
         nameLbl.addMouseListener(fwd);
         inner.add(nameLbl);
 
-        // 開課系所
         if (!c.getDepartment().isEmpty()) {
             JLabel deptLbl = new JLabel(c.getDepartment());
             deptLbl.setFont(AppFonts.CAPTION);
@@ -602,7 +587,6 @@ public class SchedulePanel extends JPanel {
             inner.add(deptLbl);
         }
 
-        // 開課年班
         if (!c.getClassYear().isEmpty()) {
             JLabel cyLbl = new JLabel(c.getClassYear());
             cyLbl.setFont(AppFonts.CAPTION);
@@ -612,7 +596,6 @@ public class SchedulePanel extends JPanel {
             inner.add(cyLbl);
         }
 
-        // 教室
         if (!c.getLocation().isEmpty()) {
             JLabel locLbl = new JLabel(c.getLocation());
             locLbl.setFont(AppFonts.CAPTION);
@@ -629,9 +612,7 @@ public class SchedulePanel extends JPanel {
         return card;
     }
 
-    /** 取得課程顏色索引（優先使用自訂；fallback 用 id 取模） */
     private int[] getCourseColorIndex(Course c) {
-        // Course.colorIndex 若為 -1 則用 fallback
         int idx = c.getColorIndex();
         if (idx < 0 || idx >= PRESET_COLORS.length) {
             idx = (c.getId() - 1) % PRESET_COLORS.length;
@@ -658,6 +639,7 @@ public class SchedulePanel extends JPanel {
         currentPopover = buildCoursePopover(course);
         int popW = 290;
         currentPopover.setSize(popW, 9999);
+        currentPopover.validate();
         int popH = Math.min(currentPopover.getPreferredSize().height, layered.getHeight() - 20);
 
         Point al = SwingUtilities.convertPoint(anchor, 0, 0, layered);
@@ -690,7 +672,7 @@ public class SchedulePanel extends JPanel {
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // 課程 Popover（[] 內文字與內容同色、顯示所有欄位）
+    // 課程 Popover
     // ══════════════════════════════════════════════════════════════════════════
     private JPanel buildCoursePopover(Course course) {
         int[] ci = getCourseColorIndex(course);
@@ -704,8 +686,7 @@ public class SchedulePanel extends JPanel {
             new EmptyBorder(0, 0, 0, 0)));
         pop.setOpaque(true);
 
-        // Header
-        JPanel header = new JPanel(new BorderLayout());
+        JPanel header = new JPanel(new BorderLayout(0, 0));
         header.setBackground(headerBg);
         header.setBorder(new EmptyBorder(10, 14, 10, 10));
 
@@ -720,24 +701,28 @@ public class SchedulePanel extends JPanel {
         titleLbl.setOpaque(false);
         titleLbl.setBorder(null);
 
-        JButton closeBtn = new JButton("x");
-        closeBtn.setFont(new Font(AppFonts.CAPTION.getFamily(), Font.PLAIN, 11));
+        JButton closeBtn = new JButton("×");
+        closeBtn.setFont(new Font(AppFonts.CAPTION.getFamily(), Font.PLAIN, 13));
         closeBtn.setForeground(AppColors.TEXT_TERTIARY);
-        closeBtn.setBorder(new EmptyBorder(2, 6, 2, 6));
+        closeBtn.setBorder(new EmptyBorder(0, 6, 0, 0));
         closeBtn.setFocusPainted(false);
         closeBtn.setContentAreaFilled(false);
         closeBtn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
         closeBtn.addActionListener(e -> closePopover());
-        header.add(titleLbl, BorderLayout.CENTER);
-        header.add(closeBtn, BorderLayout.EAST);
 
-        // Body
+        // closeWrapper 讓 X 固定在右上角，不隨 title 增高而垂直置中
+        JPanel closeWrapper = new JPanel(new BorderLayout());
+        closeWrapper.setOpaque(false);
+        closeWrapper.add(closeBtn, BorderLayout.NORTH);
+
+        header.add(titleLbl,     BorderLayout.CENTER);
+        header.add(closeWrapper, BorderLayout.EAST);
+
         JPanel body = new JPanel();
         body.setLayout(new BoxLayout(body, BoxLayout.Y_AXIS));
         body.setBackground(Color.WHITE);
         body.setBorder(new EmptyBorder(12, 14, 8, 14));
 
-        // 時間（支援多時段：標籤只顯示一次，多時段用換行排列在右側）
         String schedStr = course.getScheduleString();
         String[] timeSlots;
         if (schedStr != null && !schedStr.isEmpty()) {
@@ -773,7 +758,6 @@ public class SchedulePanel extends JPanel {
         }
 
         if (!course.getNote().isEmpty()) {
-            // 備註用兩欄格式，內容放在 TextArea（含捲軸）
             JPanel noteRow = new JPanel(new BorderLayout(0, 0));
             noteRow.setOpaque(false);
             noteRow.setAlignmentX(Component.LEFT_ALIGNMENT);
@@ -821,7 +805,6 @@ public class SchedulePanel extends JPanel {
         bodyScroll.getVerticalScrollBar().setUnitIncrement(16);
         AppUIManager.applySlimScrollBar(bodyScroll);
 
-        // 按鈕列
         CardLayout btnCard = new CardLayout();
         JPanel btnRow = new JPanel(btnCard);
         btnRow.setBackground(new Color(0xFAF9F7));
@@ -857,42 +840,26 @@ public class SchedulePanel extends JPanel {
         return pop;
     }
 
-    /**
-     * 時間列：[時間] 標籤只出現一次，多個時段垂直排列在右側。
-     */
-    /**
-     * 時間列：標籤欄靠右，內容欄靠左，多時段垂直堆疊在內容欄。
-     */
     private JPanel popTimeRow(String[] slots, Color accentCol) {
         return popTwoColRow("時間", slots, accentCol);
     }
 
-    /**
-     * 通用兩欄資訊列：[標籤] 靠右 ｜ 內容 靠左。
-     * 標籤固定寬度，內容欄可換行。
-     */
     private JPanel popTwoColRow(String tag, String[] lines, Color accentCol) {
-        String tagHex = String.format("#%02X%02X%02X",
-            accentCol.darker().getRed(), accentCol.darker().getGreen(), accentCol.darker().getBlue());
-
         JPanel row = new JPanel(new BorderLayout(0, 0));
         row.setOpaque(false);
         row.setAlignmentX(Component.LEFT_ALIGNMENT);
 
-        // 標籤欄（固定寬，靠右對齊）
         JLabel tagLbl = new JLabel(tag, SwingConstants.RIGHT);
         tagLbl.setFont(AppFonts.CAPTION.deriveFont(Font.BOLD));
         tagLbl.setForeground(new Color(accentCol.darker().getRGB()).darker());
         tagLbl.setPreferredSize(new Dimension(48, 16));
         tagLbl.setVerticalAlignment(SwingConstants.TOP);
 
-        // 分隔線
         JLabel sep = new JLabel("  ·  ");
         sep.setFont(AppFonts.CAPTION);
         sep.setForeground(AppColors.BORDER_HOVER);
         sep.setVerticalAlignment(SwingConstants.TOP);
 
-        // 內容欄（靠左，多行垂直排）
         JPanel contentCol = new JPanel();
         contentCol.setLayout(new BoxLayout(contentCol, BoxLayout.Y_AXIS));
         contentCol.setOpaque(false);
@@ -915,7 +882,6 @@ public class SchedulePanel extends JPanel {
         return row;
     }
 
-    /** 單行版本的兩欄資訊列 */
     private JPanel popInfoRow(String tag, String content, Color accentCol) {
         return popTwoColRow(tag, new String[]{ content }, accentCol);
     }
@@ -1047,45 +1013,103 @@ public class SchedulePanel extends JPanel {
         JDialog dlg = new JDialog(owner, "", Dialog.ModalityType.APPLICATION_MODAL);
         JPanel root = buildFloatingRoot(dlg, isEdit ? "重新命名課表" : "新增課表", AppColors.ACCENT);
 
-        JTextField nameField = new JTextField(isEdit ? editSchedule.getName() : "");
-        nameField.setFont(AppFonts.BODY_MEDIUM);
-        nameField.setBorder(BorderFactory.createCompoundBorder(
-            new LineBorder(AppColors.BORDER_DEFAULT, 1, true),
-            new EmptyBorder(5, 8, 5, 8)));
-
         JPanel content = new JPanel(new GridBagLayout());
         content.setOpaque(false);
         content.setBorder(new EmptyBorder(14, 16, 10, 16));
         GridBagConstraints gc = new GridBagConstraints();
-        gc.gridx = 0; gc.weightx = 1.0; gc.fill = GridBagConstraints.HORIZONTAL; gc.anchor = GridBagConstraints.WEST;
-        gc.gridy = 0; gc.insets = new Insets(0, 0, 4, 0);  content.add(dlgFieldLabel("課表名稱"), gc);
-        gc.gridy = 1; gc.insets = new Insets(0, 0, 0, 0);  content.add(nameField, gc);
+        gc.gridx = 0; gc.weightx = 1.0;
+        gc.fill = GridBagConstraints.HORIZONTAL;
+        gc.anchor = GridBagConstraints.WEST;
 
-        Runnable onOk = () -> {
-            String val = nameField.getText().trim();
-            if (val.isEmpty()) {
-                nameField.setBorder(BorderFactory.createCompoundBorder(
-                    new LineBorder(AppColors.DANGER, 1, true), new EmptyBorder(5, 8, 5, 8)));
-                nameField.requestFocus();
-                return;
-            }
-            if (isEdit) {
+        int rowIdx = 0;
+
+        if (isEdit) {
+            // ── 重新命名：原名稱（唯讀）＋ 新名稱 ──
+            // 原名稱
+            gc.gridy = rowIdx++; gc.insets = new Insets(0, 0, 4, 0);
+            content.add(dlgFieldLabel("原名稱"), gc);
+
+            JTextField oldField = new JTextField(editSchedule.getName());
+            oldField.setFont(AppFonts.BODY_MEDIUM);
+            oldField.setEditable(false);
+            oldField.setFocusable(false);
+            oldField.setBackground(AppColors.BG_TERTIARY);
+            oldField.setForeground(AppColors.TEXT_SECONDARY);
+            oldField.setBorder(BorderFactory.createCompoundBorder(
+                new LineBorder(AppColors.BORDER_DEFAULT, 1, true),
+                new EmptyBorder(5, 8, 5, 8)));
+            gc.gridy = rowIdx++; gc.insets = new Insets(0, 0, 12, 0);
+            content.add(oldField, gc);
+
+            // 新名稱
+            gc.gridy = rowIdx++; gc.insets = new Insets(0, 0, 4, 0);
+            content.add(dlgFieldLabel("新名稱"), gc);
+
+            JTextField newField = new JTextField();
+            newField.setFont(AppFonts.BODY_MEDIUM);
+            newField.setBorder(BorderFactory.createCompoundBorder(
+                new LineBorder(AppColors.BORDER_DEFAULT, 1, true),
+                new EmptyBorder(5, 8, 5, 8)));
+            gc.gridy = rowIdx++; gc.insets = new Insets(0, 0, 0, 0);
+            content.add(newField, gc);
+
+            Runnable onOk = () -> {
+                String val = newField.getText().trim();
+                if (val.isEmpty()) {
+                    newField.setBorder(BorderFactory.createCompoundBorder(
+                        new LineBorder(AppColors.DANGER, 1, true),
+                        new EmptyBorder(5, 8, 5, 8)));
+                    newField.requestFocus();
+                    return;
+                }
                 editSchedule.setName(val);
                 rebuildCombo();
-            } else {
+                dlg.dispose();
+                refreshScheduleButtons();
+                saveCallback.run();
+            };
+            newField.addActionListener(e -> onOk.run());
+
+            root.add(content, BorderLayout.CENTER);
+            root.add(buildDlgBtnRow(dlg, "儲存", AppColors.ACCENT, onOk), BorderLayout.SOUTH);
+
+        } else {
+            // ── 新增：只有課表名稱欄位 ──
+            JTextField nameField = new JTextField();
+            nameField.setFont(AppFonts.BODY_MEDIUM);
+            nameField.setBorder(BorderFactory.createCompoundBorder(
+                new LineBorder(AppColors.BORDER_DEFAULT, 1, true),
+                new EmptyBorder(5, 8, 5, 8)));
+
+            gc.gridy = rowIdx++; gc.insets = new Insets(0, 0, 4, 0);
+            content.add(dlgFieldLabel("課表名稱"), gc);
+            gc.gridy = rowIdx++; gc.insets = new Insets(0, 0, 0, 0);
+            content.add(nameField, gc);
+
+            Runnable onOk = () -> {
+                String val = nameField.getText().trim();
+                if (val.isEmpty()) {
+                    nameField.setBorder(BorderFactory.createCompoundBorder(
+                        new LineBorder(AppColors.DANGER, 1, true),
+                        new EmptyBorder(5, 8, 5, 8)));
+                    nameField.requestFocus();
+                    return;
+                }
                 int nextId = schedules.isEmpty() ? 1
                         : schedules.stream().mapToInt(Schedule::getId).max().orElse(0) + 1;
                 Schedule s = new Schedule(nextId, val);
                 schedules.add(s);
                 switchSchedule(s);
-            }
-            dlg.dispose();
-            refreshScheduleButtons();
-            saveCallback.run();
-        };
+                dlg.dispose();
+                refreshScheduleButtons();
+                saveCallback.run();
+            };
+            nameField.addActionListener(e -> onOk.run());
 
-        root.add(content, BorderLayout.CENTER);
-        root.add(buildDlgBtnRow(dlg, isEdit ? "儲存" : "新增", AppColors.ACCENT, onOk), BorderLayout.SOUTH);
+            root.add(content, BorderLayout.CENTER);
+            root.add(buildDlgBtnRow(dlg, "新增", AppColors.ACCENT, onOk), BorderLayout.SOUTH);
+        }
+
         dlg.pack();
         dlg.setSize(320 + 7, dlg.getHeight());
         dlg.setLocationRelativeTo(this);
@@ -1135,10 +1159,8 @@ public class SchedulePanel extends JPanel {
         JPanel colorPanel = buildColorPicker(selectedColorIdx);
 
         // ── 多時段排程區塊 ──
-        // 初始時段資料
-        List<int[]> initSlots = new ArrayList<>(); // [dayOfWeek, start, end]
+        List<int[]> initSlots = new ArrayList<>();
         if (isEdit) {
-            // 解析已有的多時段或 fallback 單時段
             String schedStr = editCourse.getScheduleString();
             if (schedStr != null && !schedStr.isEmpty()) {
                 for (String slot : schedStr.split(";")) {
@@ -1161,7 +1183,6 @@ public class SchedulePanel extends JPanel {
 
         List<SlotRow> slotRows = new ArrayList<>();
 
-        // 記錄「無刪除按鈕」時的基準寬度（在第一次 pack 後取得）
         final int[] baseWidth = { 0 };
 
         Runnable rebuildSlots = new Runnable() {
@@ -1199,11 +1220,9 @@ public class SchedulePanel extends JPanel {
                 int screenH = Toolkit.getDefaultToolkit().getScreenSize().height;
                 int maxH = (int)(screenH * 0.85);
                 if (!hasRemoveBtn) {
-                    // 無刪除按鈕：用 pack 的自然寬度，並記錄為基準寬
                     baseWidth[0] = dlg.getWidth();
                     dlg.setSize(baseWidth[0], Math.min(dlg.getPreferredSize().height, maxH));
                 } else {
-                    // 有刪除按鈕：寬度取 pack 後值（包含按鈕），但至少要比基準寬
                     int w = Math.max(dlg.getWidth(), baseWidth[0]);
                     dlg.setSize(w, Math.min(dlg.getPreferredSize().height, maxH));
                 }
@@ -1228,7 +1247,7 @@ public class SchedulePanel extends JPanel {
             rebuildSlots.run();
         });
 
-        // ── 現代風格錯誤 Banner（須在 content 組裝前宣告）──
+        // ── 錯誤 Banner ──
         JPanel errorBanner = new JPanel(new BorderLayout(8, 0));
         errorBanner.setOpaque(true);
         errorBanner.setBackground(AppColors.DANGER_LIGHT);
@@ -1237,21 +1256,17 @@ public class SchedulePanel extends JPanel {
             new EmptyBorder(8, 12, 8, 12)));
         errorBanner.setVisible(false);
 
-        // 錯誤圖示：純幾何繪製，不依賴任何字型
         JPanel errorIcon = new JPanel() {
             @Override protected void paintComponent(Graphics g) {
                 Graphics2D g2 = (Graphics2D) g.create();
                 g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
                 int w = getWidth(), h = getHeight();
-                // 紅色實心圓
                 g2.setColor(AppColors.DANGER);
                 g2.fillOval(0, 0, w, h);
-                // 白色垂直線（驚嘆號主幹）
                 g2.setColor(Color.WHITE);
                 g2.setStroke(new BasicStroke(2f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
                 int cx = w / 2;
                 g2.drawLine(cx, 3, cx, h - 6);
-                // 白色圓點（驚嘆號底點）
                 g2.fillOval(cx - 1, h - 4, 3, 3);
                 g2.dispose();
             }
@@ -1261,7 +1276,6 @@ public class SchedulePanel extends JPanel {
         errorIcon.setMinimumSize(new Dimension(16, 16));
         errorIcon.setMaximumSize(new Dimension(16, 16));
 
-        // 包一層讓圖示垂直置中，右側加間距
         JPanel iconWrap = new JPanel(new GridBagLayout());
         iconWrap.setOpaque(false);
         iconWrap.setBorder(new EmptyBorder(0, 0, 0, 8));
@@ -1295,17 +1309,11 @@ public class SchedulePanel extends JPanel {
         gc.gridy = r++; gc.insets = new Insets(0,0,10,0);  content.add(deptField, gc);
         gc.gridy = r++; gc.insets = new Insets(0,0,4,0);   content.add(dlgFieldLabel("開課年班"), gc);
         gc.gridy = r++; gc.insets = new Insets(0,0,10,0);  content.add(cyearField, gc);
-
-        // 星期與節次（多時段）
         gc.gridy = r++; gc.insets = new Insets(0,0,6,0);   content.add(dlgFieldLabel("上課時段"), gc);
         gc.gridy = r++; gc.insets = new Insets(0,0,4,0);   content.add(slotsContainer, gc);
         gc.gridy = r++; gc.insets = new Insets(0,0,10,0);  content.add(addSlotBtn, gc);
-
-        // 課程顏色
         gc.gridy = r++; gc.insets = new Insets(0,0,6,0);   content.add(dlgFieldLabel("課程顏色"), gc);
         gc.gridy = r++; gc.insets = new Insets(0,0,10,0);  content.add(colorPanel, gc);
-
-        // 備註
         gc.gridy = r++; gc.insets = new Insets(0,0,4,0);   content.add(dlgFieldLabel("備註"), gc);
         gc.gridy = r++;  gc.insets = new Insets(0,0,0,0);  content.add(noteScroll, gc);
 
@@ -1340,7 +1348,6 @@ public class SchedulePanel extends JPanel {
                 return;
             }
 
-            // 驗證所有時段：結束節次 >= 開始節次
             for (int si = 0; si < slotRows.size(); si++) {
                 SlotRow sr = slotRows.get(si);
                 if (sr.getEnd() < sr.getStart()) {
@@ -1354,7 +1361,6 @@ public class SchedulePanel extends JPanel {
                 }
             }
 
-            // 偵測與現有課程的時段重疊
             String conflictMsg = detectOverlap(slotRows, isEdit ? editCourse : null);
             if (conflictMsg != null) {
                 errorMsg.setText("<html>" + conflictMsg + "</html>");
@@ -1365,18 +1371,15 @@ public class SchedulePanel extends JPanel {
                 return;
             }
 
-            // 清除錯誤狀態
             errorBanner.setVisible(false);
             nameField.setBorder(BorderFactory.createCompoundBorder(
                 new LineBorder(AppColors.BORDER_DEFAULT, 1, true), new EmptyBorder(5, 8, 5, 8)));
 
-            // 使用第一個時段作為主要 dayOfWeek/start/end（向下相容）
             SlotRow first = slotRows.get(0);
             int day   = first.getDay();
             int start = first.getStart();
             int end   = first.getEnd();
 
-            // 建立多時段字串
             StringBuilder sb = new StringBuilder();
             for (int i = 0; i < slotRows.size(); i++) {
                 SlotRow sr = slotRows.get(i);
@@ -1420,7 +1423,6 @@ public class SchedulePanel extends JPanel {
         dlg.pack();
         int screenH = Toolkit.getDefaultToolkit().getScreenSize().height;
         int maxH    = (int)(screenH * 0.85);
-        // 直接用 pack() 的自然寬度，不強制設定，讓版面自己決定
         dlg.setSize(dlg.getWidth(), Math.min(dlg.getHeight(), maxH));
         dlg.setLocationRelativeTo(null);
         dlg.setVisible(true);
@@ -1450,7 +1452,6 @@ public class SchedulePanel extends JPanel {
                     g2.setStroke(new BasicStroke(selectedColorIdx[0] == idx ? 3f : 1.5f));
                     g2.drawOval(1, 1, getWidth()-2, getHeight()-2);
                     if (selectedColorIdx[0] == idx) {
-                        // 中心打勾
                         g2.setColor(accC);
                         g2.setStroke(new BasicStroke(2f));
                         g2.drawLine(getWidth()/2-4, getHeight()/2, getWidth()/2-1, getHeight()/2+3);
@@ -1475,7 +1476,7 @@ public class SchedulePanel extends JPanel {
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // 時段列（星期 + 開始節次 ～ 結束節次）
+    // 時段列
     // ══════════════════════════════════════════════════════════════════════════
     class SlotRow {
         JPanel panel;
@@ -1526,15 +1527,9 @@ public class SchedulePanel extends JPanel {
         int getEnd()   { return (int) endBox.getSelectedItem(); }
     }
 
-    /**
-     * 偵測 slotRows 中的時段是否與現有課程（排除 excludeCourse）重疊。
-     * 也偵測 slotRows 自己之間是否互相重疊。
-     * 回傳第一個衝突的說明字串，無衝突時回傳 null。
-     */
     private String detectOverlap(List<SlotRow> slotRows, Course excludeCourse) {
         if (activeSchedule == null) return null;
 
-        // 先偵測自身時段之間的重疊
         for (int i = 0; i < slotRows.size(); i++) {
             for (int j = i + 1; j < slotRows.size(); j++) {
                 SlotRow a = slotRows.get(i);
@@ -1549,7 +1544,6 @@ public class SchedulePanel extends JPanel {
             }
         }
 
-        // 偵測與其他課程的重疊
         for (SlotRow sr : slotRows) {
             int day   = sr.getDay();
             int start = sr.getStart();
@@ -1558,7 +1552,6 @@ public class SchedulePanel extends JPanel {
             for (Course c : activeSchedule.getCourses()) {
                 if (excludeCourse != null && c.getId() == excludeCourse.getId()) continue;
 
-                // 解析課程的所有時段
                 List<int[]> existingSlots = new ArrayList<>();
                 String schedStr = c.getScheduleString();
                 if (schedStr != null && !schedStr.isEmpty()) {
@@ -1583,16 +1576,13 @@ public class SchedulePanel extends JPanel {
         return null;
     }
 
-    /** 解析 "星期三 第3～5節" → [3, 3, 5] */
     private int[] parseSlotString(String s) {
         try {
-            // 取星期
             int dayIdx = -1;
             for (int i = 0; i < DAY_NAMES.length; i++) {
                 if (s.contains("星期" + DAY_NAMES[i])) { dayIdx = i + 1; break; }
             }
             if (dayIdx < 0) return null;
-            // 取節次
             int startIdx = s.indexOf("第") + 1;
             int waveIdx  = s.indexOf("～", startIdx);
             int endIdx   = s.indexOf("節", waveIdx);
