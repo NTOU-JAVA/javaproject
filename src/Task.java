@@ -1,6 +1,6 @@
 /**
  * Task 表示一筆行事曆任務。
- * 新增：title（標題）、description（詳細內容）、completed（完成狀態）
+ * 新增：title（標題）、description（詳細內容）、completed（完成狀態）、category（分類）
  * deadline 即原本的 date+time，可選（hasDeadline 為 false 時不顯示）
  */
 public class Task {
@@ -12,6 +12,7 @@ public class Task {
     private boolean hasDeadline;
     private boolean important;
     private boolean completed;
+    private String  category;    // 分類名稱，空字串表示未分類
 
     public Task() {}
 
@@ -25,6 +26,7 @@ public class Task {
         this.hasDeadline = hasDeadline;
         this.important   = false;
         this.completed   = false;
+        this.category    = "";
     }
 
     // 向下相容舊建構子（date+time 固定存在）
@@ -37,6 +39,7 @@ public class Task {
         this.hasDeadline = true;
         this.important   = false;
         this.completed   = false;
+        this.category    = "";
     }
 
     public int     getId()          { return id; }
@@ -66,4 +69,7 @@ public class Task {
 
     public boolean isCompleted()                    { return completed; }
     public void    setCompleted(boolean completed)  { this.completed = completed; }
+
+    public String  getCategory()                    { return category != null ? category : ""; }
+    public void    setCategory(String category)     { this.category = category != null ? category : ""; }
 }

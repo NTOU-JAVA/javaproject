@@ -1,6 +1,6 @@
 /**
  * TodoItem 表示一筆代辦事項。
- * 新增：title（標題）、description（詳細說明）
+ * 新增：title（標題）、description（詳細說明）、category（分類）
  * reminderTime 改為可選的 deadline（語意更清楚）
  */
 public class TodoItem {
@@ -9,6 +9,7 @@ public class TodoItem {
     private String  description;  // 詳細說明，可為空字串
     private String  reminderTime; // 格式 YYYY-MM-DD HH:mm，可為 null（無 deadline）
     private boolean completed;
+    private String  category;     // 分類名稱，空字串表示未分類
 
     public TodoItem() {}
 
@@ -18,6 +19,7 @@ public class TodoItem {
         this.description = description;
         this.reminderTime = reminderTime;
         this.completed   = false;
+        this.category    = "";
     }
 
     // 向下相容舊建構子
@@ -43,4 +45,7 @@ public class TodoItem {
 
     public boolean isCompleted()                    { return completed; }
     public void    setCompleted(boolean completed)  { this.completed = completed; }
+
+    public String  getCategory()                    { return category != null ? category : ""; }
+    public void    setCategory(String category)     { this.category = category != null ? category : ""; }
 }

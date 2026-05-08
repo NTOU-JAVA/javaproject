@@ -9,8 +9,7 @@ import java.util.List;
 
 /**
  * TodoPanel：代辦事項面板。
- * 左側圓圈可點擊切換完成狀態；每列右側有編輯、刪除按鈕。
- * v0.4：新增 getTodos() 供 MainFrame 在登入同步後存取清單。
+ * v0.5：加入分類 Tag 篩選列與新增/編輯時的分類選擇。
  */
 public class TodoPanel extends JPanel {
 
@@ -19,6 +18,7 @@ public class TodoPanel extends JPanel {
 
     private final List<TodoItem>         todos;
     private final Runnable               saveCallback;
+    private final CategoryManager        categoryManager;
     private final java.util.Set<Integer> remindedIds = new java.util.HashSet<>();
     private final Timer                  reminderTimer;
 
@@ -26,14 +26,23 @@ public class TodoPanel extends JPanel {
     private final JPanel listContainer = new JPanel();
     { listContainer.setLayout(new BoxLayout(listContainer, BoxLayout.Y_AXIS)); }
 
-    public TodoPanel(List<TodoItem> todos, Runnable saveCallback) {
-        this.todos        = todos;
-        this.saveCallback = saveCallback;
+    // 目前選取的分類篩選
+    private String currentFilter = CategoryManager.ALL;
+
+    public TodoPanel(List<TodoItem> todos, Runnable saveCallback, CategoryManager categoryManager) {
+        this.todos           = todos;
+        this.saveCallback    = saveCallback;
+        this.categoryManager = categoryManager;
 
         setLayout(new BorderLayout(0, 0));
         setBackground(AppColors.BG_SECONDARY);
 
-        add(buildTopNav(),   BorderLayout.NORTH);
+        // 頂部：導覽列 + Tag 列
+        JPanel topArea = new JPanel(new BorderLayout());
+        topArea.setOpaque(false);
+        topArea.add(buildTopNav(), BorderLayout.NORTH);
+        topArea.add(buildTagBar(), BorderLayout.SOUTH);
+        add(topArea,         BorderLayout.NORTH);
         add(buildListArea(), BorderLayout.CENTER);
         add(buildHintBar(),  BorderLayout.SOUTH);
 
@@ -71,11 +80,18 @@ public class TodoPanel extends JPanel {
         return nav;
     }
 
+    // ── Tag 篩選列 ───────────────────────────────────────────────────────────
+    private CategoryTagBar buildTagBar() {
+        return new CategoryTagBar(categoryManager, filter -> {
+            currentFilter = filter;
+            refreshList();
+        });
+    }
+
     // ── 清單區 ──────────────────────────────────────────────────────────────
     private JScrollPane buildListArea() {
         listContainer.setBackground(AppColors.BG_PRIMARY);
 
-        // wrapper 用 BorderLayout + NORTH，讓 listContainer 不被拉伸高度
         JPanel wrapper = new JPanel(new BorderLayout());
         wrapper.setBackground(AppColors.BG_PRIMARY);
         wrapper.add(listContainer, BorderLayout.NORTH);
@@ -86,7 +102,6 @@ public class TodoPanel extends JPanel {
         sp.getViewport().setBackground(AppColors.BG_PRIMARY);
         AppUIManager.applySlimScrollBar(sp);
 
-        // 關鍵：viewport 寬度變化時強制所有 row 寬度跟著更新
         sp.getViewport().addComponentListener(new ComponentAdapter() {
             @Override public void componentResized(ComponentEvent e) {
                 int vpW = sp.getViewport().getWidth();
@@ -149,7 +164,7 @@ public class TodoPanel extends JPanel {
             }
         });
 
-        // 中間：標題 + 說明 + 期限
+        // 中間：標題 + 說明 + 期限 + 分類標籤
         JPanel center = new JPanel() {
             @Override public Dimension getMaximumSize() {
                 Dimension ps = getPreferredSize();
@@ -207,6 +222,11 @@ public class TodoPanel extends JPanel {
                 center.add(Box.createRigidArea(new Dimension(0, 1)));
                 center.add(timeLbl);
             }
+            // 分類標籤（若有）
+            if (!item.getCategory().isEmpty()) {
+                center.add(Box.createRigidArea(new Dimension(0, 2)));
+                center.add(buildInlineCategoryTag(item.getCategory()));
+            }
         }
 
         // 右側：CardLayout 切換正常/確認刪除
@@ -254,6 +274,26 @@ public class TodoPanel extends JPanel {
         row.add(center,  BorderLayout.CENTER);
         row.add(actions, BorderLayout.EAST);
         return row;
+    }
+
+    /** 小型分類標籤（顯示在項目內容下方） */
+    private JLabel buildInlineCategoryTag(String category) {
+        JLabel tag = new JLabel(category) {
+            @Override protected void paintComponent(Graphics g) {
+                Graphics2D g2 = (Graphics2D) g.create();
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                g2.setColor(AppColors.ACCENT_LIGHT);
+                g2.fillRoundRect(0, 0, getWidth(), getHeight(), getHeight(), getHeight());
+                g2.dispose();
+                super.paintComponent(g);
+            }
+        };
+        tag.setFont(AppFonts.CAPTION);
+        tag.setForeground(AppColors.ACCENT);
+        tag.setBorder(new EmptyBorder(1, 7, 1, 7));
+        tag.setOpaque(false);
+        tag.setAlignmentX(Component.LEFT_ALIGNMENT);
+        return tag;
     }
 
     private static JButton actionBtn(String text, Color bg, Color fg) {
@@ -350,6 +390,24 @@ public class TodoPanel extends JPanel {
         descScroll.setMinimumSize(new Dimension(0, 86));
         AppUIManager.applySlimScrollBar(descScroll);
 
+        // ── 分類下拉 ──
+        java.util.List<String> catOptions = new java.util.ArrayList<>();
+        catOptions.add("（未分類）");
+        catOptions.addAll(categoryManager.getCategories());
+        JComboBox<String> catCombo = new JComboBox<>(catOptions.toArray(new String[0]));
+        catCombo.setFont(AppFonts.BODY_SMALL);
+        catCombo.setBackground(Color.WHITE);
+        catCombo.setForeground(AppColors.TEXT_PRIMARY);
+        catCombo.setBorder(BorderFactory.createCompoundBorder(
+            new LineBorder(AppColors.BORDER_DEFAULT, 1, true),
+            new EmptyBorder(2, 4, 2, 4)));
+        SchedulePanel.applyComboStyle(catCombo);
+        // 預選
+        if (isEdit && !editItem.getCategory().isEmpty()) {
+            catCombo.setSelectedItem(editItem.getCategory());
+        }
+
+        // ── 截止時間 ──
         LocalDateTime base = LocalDateTime.now();
         if (isEdit && editItem.getReminderTime() != null) {
             try { base = LocalDateTime.parse(editItem.getReminderTime(), REMINDER_FMT); }
@@ -413,15 +471,17 @@ public class TodoPanel extends JPanel {
         gc.gridy = 1; gc.insets = new Insets(0, 0, 12, 0); content.add(titleField, gc);
         gc.gridy = 2; gc.insets = new Insets(0, 0, 4, 0);  content.add(fieldLabel("說明"), gc);
         gc.gridy = 3; gc.insets = new Insets(0, 0, 12, 0); content.add(descScroll, gc);
-        gc.gridy = 4; gc.insets = new Insets(0, 0, initHasDeadline ? 6 : 0, 0);
+        gc.gridy = 4; gc.insets = new Insets(0, 0, 4, 0);  content.add(fieldLabel("分類"), gc);
+        gc.gridy = 5; gc.insets = new Insets(0, 0, 12, 0); content.add(catCombo, gc);
+        gc.gridy = 6; gc.insets = new Insets(0, 0, initHasDeadline ? 6 : 0, 0);
         content.add(deadlineCheck, gc);
-        gc.gridy = 5; gc.insets = new Insets(0, 0, 0, 0);  content.add(dtPanel, gc);
+        gc.gridy = 7; gc.insets = new Insets(0, 0, 0, 0);  content.add(dtPanel, gc);
 
         deadlineCheck.addActionListener(e -> {
             boolean on = deadlineCheck.isSelected();
             dtPanel.setVisible(on);
             GridBagConstraints updGc = new GridBagConstraints();
-            updGc.gridx = 0; updGc.gridy = 4; updGc.weightx = 1.0;
+            updGc.gridx = 0; updGc.gridy = 6; updGc.weightx = 1.0;
             updGc.fill = GridBagConstraints.HORIZONTAL;
             updGc.anchor = GridBagConstraints.WEST;
             updGc.insets = new Insets(0, 0, on ? 6 : 0, 0);
@@ -484,16 +544,22 @@ public class TodoPanel extends JPanel {
                     selDate[0].getYear(), selDate[0].getMonthValue(), selDate[0].getDayOfMonth(),
                     selTime[0], selTime[1]);
             }
+            // 取得分類
+            String selectedCat = (String) catCombo.getSelectedItem();
+            if ("（未分類）".equals(selectedCat)) selectedCat = "";
+
             if (isEdit) {
                 editItem.setTitle(titleVal);
                 editItem.setDescription(descArea.getText().trim());
                 editItem.setReminderTime(reminder);
+                editItem.setCategory(selectedCat);
                 remindedIds.remove(editItem.getId());
             } else {
                 int nextId = todos.isEmpty() ? 1
                         : todos.stream().mapToInt(TodoItem::getId).max().orElse(0) + 1;
                 TodoItem item = new TodoItem(nextId, titleVal,
                         descArea.getText().trim(), reminder);
+                item.setCategory(selectedCat);
                 todos.add(item);
             }
             dlg.dispose();
@@ -519,7 +585,7 @@ public class TodoPanel extends JPanel {
         return l;
     }
 
-    // ── 更新清單顯示 ──────────────────────────────────────────────────────────
+    // ── 更新清單顯示（套用篩選） ──────────────────────────────────────────────
     public void refreshList() {
         todos.sort((a, b) -> {
             if (a.isCompleted() != b.isCompleted()) return a.isCompleted() ? 1 : -1;
@@ -531,10 +597,26 @@ public class TodoPanel extends JPanel {
         });
 
         listContainer.removeAll();
-        for (int i = 0; i < todos.size(); i++) listContainer.add(buildItemRow(todos.get(i), i));
 
-        if (todos.isEmpty()) {
-            JLabel empty = new JLabel("目前沒有代辦事項，點擊右上角新增吧！", SwingConstants.CENTER);
+        // 篩選
+        java.util.List<TodoItem> filtered = new java.util.ArrayList<>();
+        for (TodoItem t : todos) {
+            if (CategoryManager.ALL.equals(currentFilter)) {
+                filtered.add(t);
+            } else if (currentFilter.equals(t.getCategory())) {
+                filtered.add(t);
+            }
+        }
+
+        for (int i = 0; i < filtered.size(); i++) {
+            listContainer.add(buildItemRow(filtered.get(i), i));
+        }
+
+        if (filtered.isEmpty()) {
+            String msg = CategoryManager.ALL.equals(currentFilter)
+                ? "目前沒有代辦事項，點擊右上角新增吧！"
+                : "此分類下沒有代辦事項。";
+            JLabel empty = new JLabel(msg, SwingConstants.CENTER);
             empty.setFont(AppFonts.BODY_SMALL);
             empty.setForeground(AppColors.TEXT_TERTIARY);
             empty.setAlignmentX(Component.CENTER_ALIGNMENT);
@@ -544,9 +626,8 @@ public class TodoPanel extends JPanel {
         listContainer.revalidate();
         listContainer.repaint();
 
-        // 確保每一列寬度與 viewport 同步（解決 RWD 跑版問題）
         SwingUtilities.invokeLater(() -> {
-            Container vp = listContainer.getParent(); // wrapper
+            Container vp = listContainer.getParent();
             if (vp != null && vp.getParent() instanceof JViewport) {
                 int vpW = ((JViewport) vp.getParent()).getWidth();
                 if (vpW > 0) {
@@ -593,5 +674,4 @@ public class TodoPanel extends JPanel {
         b.setOpaque(true);
         return b;
     }
-
 }

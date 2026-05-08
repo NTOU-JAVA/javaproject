@@ -19,6 +19,7 @@ public class Main {
     private final List<Task>     tasks     = new ArrayList<>();
     private final List<TodoItem> todos     = new ArrayList<>();
     private final List<Schedule> schedules = new ArrayList<>();
+    private final CategoryManager categoryManager = new CategoryManager();
     private MainFrame mainFrame;
     private static final String TASKS_XML     = "data/tasks.xml";
     private static final String TODOS_XML     = "data/todos.xml";
@@ -29,7 +30,7 @@ public class Main {
         loadTasksFromXML();
         loadTodosFromXML();
         loadSchedulesFromXML();
-        mainFrame = new MainFrame(tasks, todos, schedules,
+        mainFrame = new MainFrame(tasks, todos, schedules, categoryManager,
                 this::saveTasksToXML, this::saveTodosToXML, this::saveSchedulesToXML);
     }
 
@@ -58,6 +59,7 @@ public class Main {
                 String desc    = getText(el, "description", "");
                 String date    = getText(el, "date", "");
                 String time    = getText(el, "time", "");
+                String category = getText(el, "category", "");
                 boolean hasDeadline = !date.isEmpty();
                 // 如果 XML 裡有 hasDeadline 欄位以它為準
                 if (el.getElementsByTagName("hasDeadline").getLength() > 0)
@@ -66,6 +68,7 @@ public class Main {
                 Task t = new Task(id, title, desc, date, time, hasDeadline);
                 t.setImportant(Boolean.parseBoolean(getText(el, "important", "false")));
                 t.setCompleted(Boolean.parseBoolean(getText(el, "completed", "false")));
+                t.setCategory(category);
                 tasks.add(t);
             }
         } catch (Exception e) { e.printStackTrace(); }
@@ -87,10 +90,12 @@ public class Main {
                                    getText(el, "content", ""));
                 String desc    = getText(el, "description", "");
                 String rt      = getText(el, "reminderTime", "");
+                String category = getText(el, "category", "");
                 if (rt.isEmpty()) rt = null;
 
                 TodoItem item = new TodoItem(id, title, desc, rt);
                 item.setCompleted(Boolean.parseBoolean(getText(el, "completed", "false")));
+                item.setCategory(category);
                 todos.add(item);
             }
         } catch (Exception e) { e.printStackTrace(); }
@@ -190,6 +195,7 @@ public class Main {
                 appendText(doc, el, "hasDeadline",  String.valueOf(t.hasDeadline()));
                 appendText(doc, el, "important",    String.valueOf(t.isImportant()));
                 appendText(doc, el, "completed",    String.valueOf(t.isCompleted()));
+                appendText(doc, el, "category",     t.getCategory());
             }
             writeXML(doc, TASKS_XML);
         } catch (Exception e) { e.printStackTrace(); }
@@ -210,6 +216,7 @@ public class Main {
                 appendText(doc, el, "description",   t.getDescription());
                 appendText(doc, el, "reminderTime",  t.getReminderTime() != null ? t.getReminderTime() : "");
                 appendText(doc, el, "completed",     String.valueOf(t.isCompleted()));
+                appendText(doc, el, "category",      t.getCategory());
             }
             writeXML(doc, TODOS_XML);
         } catch (Exception e) { e.printStackTrace(); }

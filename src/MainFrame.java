@@ -6,7 +6,7 @@ import java.util.List;
 
 /**
  * MainFrame：主視窗，含 Topbar、Sidebar、CardLayout 內容區。
- * v0.4：整合 Tronclass 登入功能，登入後在 Topbar 顯示姓名。
+ * v0.5：整合 CategoryManager，傳遞給 CalendarPanel 和 TodoPanel。
  */
 public class MainFrame extends JFrame {
 
@@ -32,13 +32,14 @@ public class MainFrame extends JFrame {
     private String  loggedInCookie = null;
 
     public MainFrame(List<Task> tasks, List<TodoItem> todos, List<Schedule> schedules,
+                     CategoryManager categoryManager,
                      Runnable saveTasksCallback, Runnable saveTodosCallback,
                      Runnable saveSchedulesCallback) {
 
         this.saveTodosCallback = saveTodosCallback;
 
-        calendarPanel = new CalendarPanel(tasks);
-        todoPanel     = new TodoPanel(todos, saveTodosCallback);
+        calendarPanel = new CalendarPanel(tasks, categoryManager);
+        todoPanel     = new TodoPanel(todos, saveTodosCallback, categoryManager);
         newsPanel     = new SchoolNewsPanel();
         schedulePanel = new SchedulePanel(schedules, saveSchedulesCallback);
 
@@ -119,12 +120,10 @@ public class MainFrame extends JFrame {
         JPanel right = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
         right.setOpaque(false);
 
-        // 狀態提示（未登入顯示提示；登入後顯示姓名）
         topbarHintLabel = new JLabel("尚未登入");
         topbarHintLabel.setFont(AppFonts.CAPTION);
         topbarHintLabel.setForeground(AppColors.TEXT_TERTIARY);
 
-        // 頭像圓圈（顯示姓名第一個字或 ?）
         topbarAvatarLabel = new JLabel("?", SwingConstants.CENTER);
         topbarAvatarLabel.setFont(AppFonts.BODY_SMALL);
         topbarAvatarLabel.setForeground(AppColors.ACCENT_TEXT);
@@ -133,7 +132,6 @@ public class MainFrame extends JFrame {
         topbarAvatarLabel.setPreferredSize(new Dimension(32, 32));
         topbarAvatarLabel.setBorder(new LineBorder(AppColors.ACCENT, 1));
 
-        // 登入 / 重新同步 按鈕
         loginBtn = new JButton("登入 Tronclass");
         loginBtn.setFont(AppFonts.CAPTION);
         loginBtn.setBackground(AppColors.ACCENT);
@@ -154,21 +152,17 @@ public class MainFrame extends JFrame {
 
     // ── 開啟登入 Dialog ──────────────────────────────────────────────────────
     private void openLoginDialog() {
-        // 取得目前 todoPanel 所持有的 todos 參考（與 Main 共用同一份 List）
-        // 透過 saveTodosCallback 在同步完成後自動持久化
         List<TodoItem> todos = todoPanel.getTodos();
 
         TronclassLoginDialog dlg = new TronclassLoginDialog(
             this, todos, saveTodosCallback,
             (name, cookie, added) -> {
-                // 回到 EDT 更新 UI
                 SwingUtilities.invokeLater(() -> {
                     loggedInName   = name;
                     loggedInCookie = cookie;
                     updateTopbarUser(name);
                     todoPanel.refreshList();
 
-                    // 通知使用者
                     String userName = name != null ? name : "使用者";
                     String msg = added > 0
                         ? "✓ 已同步 " + added + " 筆待辦事項到「代辦事項」頁面。"
@@ -183,12 +177,8 @@ public class MainFrame extends JFrame {
         dlg.setVisible(true);
     }
 
-    /**
-     * 登入成功後更新 Topbar 顯示。
-     */
     private void updateTopbarUser(String name) {
         if (name != null && !name.isEmpty()) {
-            // 取第一個中文字作為頭像
             String initial = name.substring(0, 1);
             topbarAvatarLabel.setText(initial);
             topbarHintLabel.setText(name);
@@ -239,7 +229,7 @@ public class MainFrame extends JFrame {
         sb.add(sep);
         sb.add(Box.createRigidArea(new Dimension(0, 8)));
 
-        JLabel ver = new JLabel("  v0.4  早期預覽版");
+        JLabel ver = new JLabel("  v0.5  早期預覽版");
         ver.setFont(AppFonts.CAPTION);
         ver.setForeground(AppColors.TEXT_TERTIARY);
         ver.setAlignmentX(Component.LEFT_ALIGNMENT);
