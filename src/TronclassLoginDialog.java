@@ -10,28 +10,27 @@ import java.net.URI;
  *  1. 使用者點「開啟 Tronclass 登入頁」→ 瀏覽器跳到登入頁
  *  2. 在瀏覽器完成登入後，F12 複製 Cookie
  *  3. 貼到「Cookie」欄位 → 按「同步資料」
- *  4. 程式呼叫 TronclassService 解析姓名 + 待辦，結果透過 callback 回傳
+ *  4. 程式呼叫 TronclassService 解析姓名 + 待辦，並透過 SessionManager 更新狀態
+ *
+ * v0.6 變更：
+ *  - 接受 SessionManager 參數，登入成功後呼叫 sessionManager.onLoginSuccess()
+ *  - syncTodos 改為處理 SessionExpiredException
  */
 public class TronclassLoginDialog extends JDialog {
 
     private static final String TRONCLASS_URL = "https://tronclass.ntou.edu.tw";
     private static final String LOGIN_URL      = TRONCLASS_URL + "/user/index";
 
-    /** 登入成功後的回調 */
+    /** 登入成功後的回調（UI 更新用） */
     public interface LoginCallback {
-        /**
-         * @param name   解析到的姓名（可能為 null）
-         * @param cookie 已驗證的 Cookie 字串
-         * @param added  新增的待辦事項數量
-         */
         void onSuccess(String name, String cookie, int added);
     }
 
-    private final LoginCallback callback;
+    private final LoginCallback     callback;
+    private final SessionManager    sessionManager;
     private final java.util.List<TodoItem> currentTodos;
-    private final Runnable saveCallback;
+    private final Runnable          saveCallback;
 
-    // UI 元件
     private JTextArea cookieArea;
     private JButton   syncBtn;
     private JLabel    statusLabel;
@@ -39,18 +38,19 @@ public class TronclassLoginDialog extends JDialog {
     public TronclassLoginDialog(Window owner,
                                 java.util.List<TodoItem> currentTodos,
                                 Runnable saveCallback,
+                                SessionManager sessionManager,
                                 LoginCallback callback) {
         super(owner, "", ModalityType.APPLICATION_MODAL);
-        this.currentTodos = currentTodos;
-        this.saveCallback = saveCallback;
-        this.callback     = callback;
+        this.currentTodos   = currentTodos;
+        this.saveCallback   = saveCallback;
+        this.sessionManager = sessionManager;
+        this.callback       = callback;
 
         setUndecorated(true);
         setLayout(new BorderLayout());
         setBackground(new Color(0xF0F0F0));
 
-        JPanel root = buildRoot();
-        add(root);
+        add(buildRoot());
         pack();
         setSize(500, getPreferredSize().height);
         setLocationRelativeTo(owner);
@@ -72,7 +72,6 @@ public class TronclassLoginDialog extends JDialog {
                 }
                 g2.setColor(Color.WHITE);
                 g2.fillRoundRect(0, 0, W, H, R, R);
-                // Header 色帶
                 Component comp = getComponentCount() > 0 ? getComponent(0) : null;
                 if (comp != null) {
                     g2.setColor(AppColors.ACCENT_LIGHT);
@@ -99,7 +98,6 @@ public class TronclassLoginDialog extends JDialog {
 
         JButton closeBtn = makeCloseBtn();
         closeBtn.addActionListener(e -> dispose());
-
         header.add(title,    BorderLayout.CENTER);
         header.add(closeBtn, BorderLayout.EAST);
 
@@ -113,23 +111,34 @@ public class TronclassLoginDialog extends JDialog {
         gc.fill  = GridBagConstraints.HORIZONTAL;
         gc.anchor = GridBagConstraints.WEST;
 
-        // 步驟 1
-        gc.gridy = 0; gc.insets = new Insets(0, 0, 8, 0);
+        // 已登入時顯示提示
+        if (sessionManager.isLoggedIn()) {
+            gc.gridy = 0; gc.insets = new Insets(0, 0, 10, 0);
+            JLabel reloginHint = new JLabel(
+                "<html><span style='color:#3B5BDB'>目前已以「"
+                + sessionManager.getUserName() + "」身份登入。</span><br>"
+                + "若要重新同步，請貼入新的 Cookie。</html>");
+            reloginHint.setFont(AppFonts.BODY_SMALL);
+            content.add(reloginHint, gc);
+        }
+
+        int row = sessionManager.isLoggedIn() ? 1 : 0;
+
+        gc.gridy = row++; gc.insets = new Insets(0, 0, 8, 0);
         content.add(stepLabel("步驟 1　在瀏覽器中登入 Tronclass"), gc);
 
-        gc.gridy = 1; gc.insets = new Insets(0, 0, 14, 0);
+        gc.gridy = row++; gc.insets = new Insets(0, 0, 14, 0);
         JButton openBtn = makeOpenBtn();
         openBtn.addActionListener(e -> openBrowser());
         content.add(openBtn, gc);
 
-        // 步驟 2
-        gc.gridy = 2; gc.insets = new Insets(0, 0, 6, 0);
+        gc.gridy = row++; gc.insets = new Insets(0, 0, 6, 0);
         content.add(stepLabel("步驟 2　複製 Cookie 並貼入下方"), gc);
 
-        gc.gridy = 3; gc.insets = new Insets(0, 0, 4, 0);
+        gc.gridy = row++; gc.insets = new Insets(0, 0, 4, 0);
         content.add(hintLabel("F12 → Network → 任意請求 → Request Headers → 複製 Cookie 整行"), gc);
 
-        gc.gridy = 4; gc.insets = new Insets(0, 0, 14, 0);
+        gc.gridy = row++; gc.insets = new Insets(0, 0, 14, 0);
         cookieArea = new JTextArea(4, 0);
         cookieArea.setFont(new Font("Monospaced", Font.PLAIN, 11));
         cookieArea.setLineWrap(true);
@@ -143,8 +152,7 @@ public class TronclassLoginDialog extends JDialog {
         AppUIManager.applySlimScrollBar(cookieSp);
         content.add(cookieSp, gc);
 
-        // 狀態列
-        gc.gridy = 5; gc.insets = new Insets(0, 0, 0, 0);
+        gc.gridy = row++; gc.insets = new Insets(0, 0, 0, 0);
         statusLabel = new JLabel(" ");
         statusLabel.setFont(AppFonts.CAPTION);
         statusLabel.setForeground(AppColors.TEXT_TERTIARY);
@@ -193,14 +201,10 @@ public class TronclassLoginDialog extends JDialog {
         syncBtn.setEnabled(false);
         setStatus("正在驗證 Cookie 並同步資料，請稍候…", AppColors.TEXT_SECONDARY);
 
-        // 在背景執行，避免 UI 凍結
         new Thread(() -> {
             try {
-                // 解析姓名
-                String name = TronclassService.parseName(cookie);
-
-                // 同步待辦
-                int added = TronclassService.syncTodos(cookie, currentTodos, saveCallback);
+                String name  = TronclassService.parseName(cookie);
+                int    added = TronclassService.syncTodos(cookie, currentTodos, saveCallback);
 
                 SwingUtilities.invokeLater(() -> {
                     syncBtn.setEnabled(true);
@@ -208,25 +212,29 @@ public class TronclassLoginDialog extends JDialog {
                         setStatus("Cookie 已失效或網路異常，請重新複製 Cookie 再試。", AppColors.DANGER);
                         return;
                     }
-                    String displayName = name != null ? name : "（姓名解析失敗）";
-                    String addedMsg    = added >= 0 ? "，同步 " + added + " 筆待辦" : "，待辦同步失敗";
-                    setStatus("✓ 同步成功：" + displayName + addedMsg, AppColors.SUCCESS);
+                    String displayName = (name != null) ? name : "（姓名解析失敗）";
+                    String addedMsg    = (added >= 0) ? "，同步 " + added + " 筆待辦" : "，待辦同步失敗";
+                    setStatus("同步成功：" + displayName + addedMsg, AppColors.SUCCESS);
 
-                    // 短暫延遲後關閉並回調
+                    // 更新 SessionManager
+                    sessionManager.onLoginSuccess(name, cookie);
+
                     new Timer(1200, ev -> {
                         dispose();
                         if (callback != null)
                             callback.onSuccess(name, cookie, Math.max(added, 0));
                     }) {{ setRepeats(false); start(); }};
                 });
+
+            } catch (TronclassService.SessionExpiredException e) {
+                SwingUtilities.invokeLater(() -> {
+                    syncBtn.setEnabled(true);
+                    setStatus("Session 已失效，請重新登入並複製 Cookie。", AppColors.DANGER);
+                });
             } catch (Exception ex) {
                 SwingUtilities.invokeLater(() -> {
                     syncBtn.setEnabled(true);
-                    String msg = ex.getMessage();
-                    if ("SESSION_EXPIRED".equals(msg))
-                        setStatus("Session 已失效，請重新登入並複製 Cookie。", AppColors.DANGER);
-                    else
-                        setStatus("同步失敗：" + msg, AppColors.DANGER);
+                    setStatus("同步失敗：" + ex.getMessage(), AppColors.DANGER);
                 });
             }
         }).start();
@@ -241,7 +249,7 @@ public class TronclassLoginDialog extends JDialog {
 
     private JLabel stepLabel(String text) {
         JLabel l = new JLabel(text);
-        l.setFont(AppFonts.BODY_SMALL.deriveFont(Font.BOLD));
+        l.setFont(AppFonts.BODY_SMALL.deriveFont(java.awt.Font.BOLD));
         l.setForeground(AppColors.TEXT_PRIMARY);
         return l;
     }
@@ -254,7 +262,7 @@ public class TronclassLoginDialog extends JDialog {
     }
 
     private JButton makeOpenBtn() {
-        JButton b = new JButton("🌐  開啟 Tronclass 登入頁");
+        JButton b = new JButton("開啟 Tronclass 登入頁");
         b.setFont(AppFonts.BODY_SMALL);
         b.setBackground(AppColors.ACCENT_LIGHT);
         b.setForeground(AppColors.ACCENT);

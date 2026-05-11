@@ -14,6 +14,7 @@ import java.util.List;
 
 /**
  * Main：應用程式進入點，負責初始化資料與 UI。
+ * v0.6：MainFrame 簽名不變，SessionManager 在 MainFrame 內部建立與管理。
  */
 public class Main {
     private final List<Task>     tasks     = new ArrayList<>();
@@ -54,14 +55,12 @@ public class Main {
             for (int i = 0; i < nl.getLength(); i++) {
                 Element el = (Element) nl.item(i);
                 int    id      = parseInt(el, "id", 0);
-                String title   = getText(el, "title",
-                                   getText(el, "content", "")); // 向下相容
+                String title   = getText(el, "title", getText(el, "content", ""));
                 String desc    = getText(el, "description", "");
                 String date    = getText(el, "date", "");
                 String time    = getText(el, "time", "");
                 String category = getText(el, "category", "");
                 boolean hasDeadline = !date.isEmpty();
-                // 如果 XML 裡有 hasDeadline 欄位以它為準
                 if (el.getElementsByTagName("hasDeadline").getLength() > 0)
                     hasDeadline = Boolean.parseBoolean(getText(el, "hasDeadline", "true"));
 
@@ -86,8 +85,7 @@ public class Main {
             for (int i = 0; i < nl.getLength(); i++) {
                 Element el = (Element) nl.item(i);
                 int    id      = parseInt(el, "id", 0);
-                String title   = getText(el, "title",
-                                   getText(el, "content", ""));
+                String title   = getText(el, "title", getText(el, "content", ""));
                 String desc    = getText(el, "description", "");
                 String rt      = getText(el, "reminderTime", "");
                 String category = getText(el, "category", "");
@@ -141,6 +139,52 @@ public class Main {
         } catch (Exception e) { e.printStackTrace(); }
     }
 
+    // ── 儲存 ──────────────────────────────────────────────────────────────
+    private void saveTasksToXML() {
+        try {
+            DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
+            DocumentBuilder db = dbf.newDocumentBuilder();
+            Document doc = db.newDocument();
+            Element root = doc.createElement("taskData");
+            doc.appendChild(root);
+            for (Task t : tasks) {
+                Element el = doc.createElement("task");
+                root.appendChild(el);
+                appendText(doc, el, "id",         String.valueOf(t.getId()));
+                appendText(doc, el, "title",       t.getTitle());
+                appendText(doc, el, "description", t.getDescription());
+                appendText(doc, el, "date",        t.getDate());
+                appendText(doc, el, "time",        t.getTime());
+                appendText(doc, el, "hasDeadline", String.valueOf(t.hasDeadline()));
+                appendText(doc, el, "important",   String.valueOf(t.isImportant()));
+                appendText(doc, el, "completed",   String.valueOf(t.isCompleted()));
+                appendText(doc, el, "category",    t.getCategory());
+            }
+            writeXML(doc, TASKS_XML);
+        } catch (Exception e) { e.printStackTrace(); }
+    }
+
+    private void saveTodosToXML() {
+        try {
+            DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
+            DocumentBuilder db = dbf.newDocumentBuilder();
+            Document doc = db.newDocument();
+            Element root = doc.createElement("todoData");
+            doc.appendChild(root);
+            for (TodoItem t : todos) {
+                Element el = doc.createElement("todo");
+                root.appendChild(el);
+                appendText(doc, el, "id",          String.valueOf(t.getId()));
+                appendText(doc, el, "title",        t.getTitle());
+                appendText(doc, el, "description",  t.getDescription());
+                appendText(doc, el, "reminderTime", t.getReminderTime() != null ? t.getReminderTime() : "");
+                appendText(doc, el, "completed",    String.valueOf(t.isCompleted()));
+                appendText(doc, el, "category",     t.getCategory());
+            }
+            writeXML(doc, TODOS_XML);
+        } catch (Exception e) { e.printStackTrace(); }
+    }
+
     private void saveSchedulesToXML() {
         try {
             DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
@@ -173,52 +217,6 @@ public class Main {
                 }
             }
             writeXML(doc, SCHEDULES_XML);
-        } catch (Exception e) { e.printStackTrace(); }
-    }
-
-    // ── 儲存 ──────────────────────────────────────────────────────────────
-    private void saveTasksToXML() {
-        try {
-            DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
-            DocumentBuilder db = dbf.newDocumentBuilder();
-            Document doc = db.newDocument();
-            Element root = doc.createElement("taskData");
-            doc.appendChild(root);
-            for (Task t : tasks) {
-                Element el = doc.createElement("task");
-                root.appendChild(el);
-                appendText(doc, el, "id",          String.valueOf(t.getId()));
-                appendText(doc, el, "title",        t.getTitle());
-                appendText(doc, el, "description",  t.getDescription());
-                appendText(doc, el, "date",         t.getDate());
-                appendText(doc, el, "time",         t.getTime());
-                appendText(doc, el, "hasDeadline",  String.valueOf(t.hasDeadline()));
-                appendText(doc, el, "important",    String.valueOf(t.isImportant()));
-                appendText(doc, el, "completed",    String.valueOf(t.isCompleted()));
-                appendText(doc, el, "category",     t.getCategory());
-            }
-            writeXML(doc, TASKS_XML);
-        } catch (Exception e) { e.printStackTrace(); }
-    }
-
-    private void saveTodosToXML() {
-        try {
-            DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
-            DocumentBuilder db = dbf.newDocumentBuilder();
-            Document doc = db.newDocument();
-            Element root = doc.createElement("todoData");
-            doc.appendChild(root);
-            for (TodoItem t : todos) {
-                Element el = doc.createElement("todo");
-                root.appendChild(el);
-                appendText(doc, el, "id",           String.valueOf(t.getId()));
-                appendText(doc, el, "title",         t.getTitle());
-                appendText(doc, el, "description",   t.getDescription());
-                appendText(doc, el, "reminderTime",  t.getReminderTime() != null ? t.getReminderTime() : "");
-                appendText(doc, el, "completed",     String.valueOf(t.isCompleted()));
-                appendText(doc, el, "category",      t.getCategory());
-            }
-            writeXML(doc, TODOS_XML);
         } catch (Exception e) { e.printStackTrace(); }
     }
 

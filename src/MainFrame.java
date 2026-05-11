@@ -6,7 +6,15 @@ import java.util.List;
 
 /**
  * MainFrame：主視窗，含 Topbar、Sidebar、CardLayout 內容區。
- * v0.5：整合 CategoryManager，傳遞給 CalendarPanel 和 TodoPanel。
+ *
+ * v0.6 變更：
+ *  - 引入 SessionManager 統一管理登入狀態
+ *  - Topbar 右側依狀態顯示：「登入 Tronclass」/ 已登入（名稱＋登出＋重新同步）/ 失效提示
+ *  - Cookie 失效時：
+ *      1. Topbar 顯示橘色警告列
+ *      2. 彈出一次通知 Dialog（僅第一次）
+ *      3. 使用者可點「重新登入」再次開啟登入流程
+ *  - 背景 Timer（每 15 分鐘）驗證 cookie 是否仍有效
  */
 public class MainFrame extends JFrame {
 
@@ -19,17 +27,18 @@ public class MainFrame extends JFrame {
     private final SchoolNewsPanel newsPanel;
     private final SchedulePanel   schedulePanel;
 
-    // 資料 callback（供登入後重新儲存 todos）
     private final Runnable saveTodosCallback;
 
-    // 登入後更新的 Topbar 元件
-    private JLabel  topbarAvatarLabel;
-    private JLabel  topbarHintLabel;
-    private JButton loginBtn;
+    // ── Session 管理 ────────────────────────────────────────────────────────
+    private final SessionManager sessionManager = new SessionManager();
 
-    // 目前登入狀態
-    private String  loggedInName   = null;
-    private String  loggedInCookie = null;
+    // ── Topbar 動態元件 ──────────────────────────────────────────────────────
+    private JPanel  topbarUserArea;   // 右側動態區域（CardLayout 切換）
+    private CardLayout topbarCard;
+    private boolean expiredDialogShown = false;
+
+    // 定時背景驗證（每 15 分鐘）
+    private Timer cookieValidationTimer;
 
     public MainFrame(List<Task> tasks, List<TodoItem> todos, List<Schedule> schedules,
                      CategoryManager categoryManager,
@@ -38,22 +47,15 @@ public class MainFrame extends JFrame {
 
         this.saveTodosCallback = saveTodosCallback;
 
-        // 分類刪除時，清空所有 tasks 中有此分類的欄位並存檔
         categoryManager.addRemoveListener(deletedCat -> {
             for (Task t : tasks) {
-                if (deletedCat.equals(t.getCategory())) {
-                    t.setCategory("");
-                }
+                if (deletedCat.equals(t.getCategory())) t.setCategory("");
             }
             saveTasksCallback.run();
         });
-
-        // 分類重新命名時，同步更新 tasks 的分類欄位
         categoryManager.addRenameListener((oldName, newName) -> {
             for (Task t : tasks) {
-                if (oldName.equals(t.getCategory())) {
-                    t.setCategory(newName);
-                }
+                if (oldName.equals(t.getCategory())) t.setCategory(newName);
             }
             saveTasksCallback.run();
         });
@@ -74,6 +76,7 @@ public class MainFrame extends JFrame {
                 saveTasksCallback.run();
                 saveTodosCallback.run();
                 saveSchedulesCallback.run();
+                if (cookieValidationTimer != null) cookieValidationTimer.stop();
             }
         });
 
@@ -95,18 +98,27 @@ public class MainFrame extends JFrame {
         contentArea.add(newsPanel,     "news");
         contentArea.add(schedulePanel, "schedule");
         body.add(contentArea, BorderLayout.CENTER);
-
         root.add(body, BorderLayout.CENTER);
+
+        // 監聽 Session 狀態變化
+        sessionManager.addListener((state, userName) -> onSessionStateChanged(state, userName));
+
+        // 啟動背景定時驗證（15 分鐘）
+        cookieValidationTimer = new Timer(2 * 60 * 1000, e -> validateCookieInBackground());
+        cookieValidationTimer.start();
     }
 
-    // ── Topbar ─────────────────────────────────────────────────────────────
+    // ══════════════════════════════════════════════════════════════════════════
+    // Topbar
+    // ══════════════════════════════════════════════════════════════════════════
+
     private JPanel buildTopbar() {
         JPanel bar = new JPanel(new BorderLayout());
         bar.setBackground(AppColors.TOPBAR_BG);
         bar.setPreferredSize(new Dimension(0, 52));
         bar.setBorder(new MatteBorder(0, 0, 1, 0, AppColors.BORDER_DEFAULT));
 
-        // 左側：圖標 + 應用名稱
+        // 左側 logo
         JPanel left = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
         left.setOpaque(false);
         left.setBorder(new EmptyBorder(0, 18, 0, 0));
@@ -136,59 +148,203 @@ public class MainFrame extends JFrame {
         left.add(appName);
         bar.add(left, BorderLayout.WEST);
 
-        // 右側：提示 / 姓名 + 頭像 + 登入按鈕
-        JPanel right = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
-        right.setOpaque(false);
+        // 右側：CardLayout 動態切換
+        topbarCard    = new CardLayout();
+        topbarUserArea = new JPanel(topbarCard);
+        topbarUserArea.setOpaque(false);
 
-        topbarHintLabel = new JLabel("尚未登入");
-        topbarHintLabel.setFont(AppFonts.CAPTION);
-        topbarHintLabel.setForeground(AppColors.TEXT_TERTIARY);
+        topbarUserArea.add(buildLoggedOutPanel(),  "logged_out");
+        topbarUserArea.add(buildLoggedInPanel(),   "logged_in");
+        topbarUserArea.add(buildExpiredPanel(),    "expired");
 
-        topbarAvatarLabel = new JLabel("?", SwingConstants.CENTER);
-        topbarAvatarLabel.setFont(AppFonts.BODY_SMALL);
-        topbarAvatarLabel.setForeground(AppColors.ACCENT_TEXT);
-        topbarAvatarLabel.setBackground(AppColors.ACCENT_LIGHT);
-        topbarAvatarLabel.setOpaque(true);
-        topbarAvatarLabel.setPreferredSize(new Dimension(32, 32));
-        topbarAvatarLabel.setBorder(new LineBorder(AppColors.ACCENT, 1));
+        topbarCard.show(topbarUserArea, "logged_out");
 
-        loginBtn = new JButton("登入 Tronclass");
-        loginBtn.setFont(AppFonts.CAPTION);
-        loginBtn.setBackground(AppColors.ACCENT);
-        loginBtn.setForeground(Color.WHITE);
-        loginBtn.setBorder(new EmptyBorder(5, 12, 5, 12));
-        loginBtn.setFocusPainted(false);
-        loginBtn.setOpaque(true);
-        loginBtn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-        loginBtn.addActionListener(e -> openLoginDialog());
-
-        right.add(topbarHintLabel);
-        right.add(topbarAvatarLabel);
-        right.add(loginBtn);
-        bar.add(right, BorderLayout.EAST);
+        JPanel rightWrapper = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
+        rightWrapper.setOpaque(false);
+        rightWrapper.add(topbarUserArea);
+        bar.add(rightWrapper, BorderLayout.EAST);
 
         return bar;
     }
 
-    // ── 開啟登入 Dialog ──────────────────────────────────────────────────────
+    /** 未登入面板 */
+    private JPanel buildLoggedOutPanel() {
+        JPanel p = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 0));
+        p.setOpaque(false);
+
+        JLabel hint = new JLabel("尚未登入");
+        hint.setFont(AppFonts.CAPTION);
+        hint.setForeground(AppColors.TEXT_TERTIARY);
+
+        JLabel avatar = makeAvatar("?");
+
+        JButton loginBtn = topbarBtn("登入 Tronclass", AppColors.ACCENT, Color.WHITE);
+        loginBtn.addActionListener(e -> openLoginDialog());
+
+        p.add(hint);
+        p.add(avatar);
+        p.add(loginBtn);
+        return p;
+    }
+
+    /** 已登入面板（含使用者名稱、登出、重新同步） */
+    private JPanel buildLoggedInPanel() {
+        JPanel p = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 0));
+        p.setOpaque(false);
+
+        JLabel nameLbl  = new JLabel("—");
+        nameLbl.setFont(AppFonts.BODY_SMALL);
+        nameLbl.setForeground(AppColors.TEXT_PRIMARY);
+        nameLbl.setName("nameLbl");
+
+        JLabel avatar = makeAvatar("?");
+        avatar.setName("avatarLbl");
+
+        JButton resyncBtn = topbarBtn("重新同步", AppColors.BG_TERTIARY, AppColors.TEXT_PRIMARY);
+        resyncBtn.addActionListener(e -> openLoginDialog());
+
+        JButton logoutBtn = topbarBtn("登出", AppColors.DANGER_LIGHT, AppColors.DANGER);
+        logoutBtn.addActionListener(e -> confirmLogout());
+
+        p.add(nameLbl);
+        p.add(avatar);
+        p.add(resyncBtn);
+        p.add(logoutBtn);
+        return p;
+    }
+
+    /** Cookie 失效面板（橘色警告） */
+    private JPanel buildExpiredPanel() {
+        JPanel p = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 0));
+        p.setOpaque(false);
+
+        JLabel warnLbl = new JLabel("登入已失效");
+        warnLbl.setFont(AppFonts.BODY_SMALL);
+        warnLbl.setForeground(AppColors.WARNING);
+
+        JButton reloginBtn = topbarBtn("重新登入", AppColors.WARNING_LIGHT, AppColors.WARNING);
+        reloginBtn.addActionListener(e -> openLoginDialog());
+
+        JButton logoutBtn = topbarBtn("清除登入", AppColors.BG_TERTIARY, AppColors.TEXT_SECONDARY);
+        logoutBtn.addActionListener(e -> sessionManager.logout());
+
+        p.add(warnLbl);
+        p.add(reloginBtn);
+        p.add(logoutBtn);
+        return p;
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // Session 狀態變化處理（在 EDT 上執行）
+    // ══════════════════════════════════════════════════════════════════════════
+
+    private void onSessionStateChanged(SessionManager.State state, String userName) {
+        switch (state) {
+            case LOGGED_IN:
+                updateLoggedInPanel(userName);
+                topbarCard.show(topbarUserArea, "logged_in");
+                expiredDialogShown = false;
+                break;
+
+            case LOGGED_OUT:
+                topbarCard.show(topbarUserArea, "logged_out");
+                expiredDialogShown = false;
+                break;
+
+            case EXPIRED:
+                topbarCard.show(topbarUserArea, "expired");
+                if (!expiredDialogShown) {
+                    expiredDialogShown = true;
+                    showSessionExpiredNotification(userName);
+                }
+                break;
+        }
+        topbarUserArea.revalidate();
+        topbarUserArea.repaint();
+    }
+
+    /** 把已登入面板中的使用者名稱與頭像更新為實際值 */
+    private void updateLoggedInPanel(String userName) {
+        // 在 buildLoggedInPanel() 中的元件找到 nameLbl 和 avatarLbl
+        JPanel p = (JPanel) topbarUserArea.getComponent(1); // "logged_in" 是第 2 個
+        for (Component c : p.getComponents()) {
+            if ("nameLbl".equals(c.getName()) && c instanceof JLabel) {
+                ((JLabel) c).setText(userName != null ? userName : "已登入");
+            }
+            if ("avatarLbl".equals(c.getName()) && c instanceof JLabel) {
+                String initial = (userName != null && !userName.isEmpty())
+                        ? String.valueOf(userName.charAt(0)) : "✓";
+                ((JLabel) c).setText(initial);
+            }
+        }
+    }
+
+    /** 顯示 cookie 失效的通知彈窗（每次失效只顯示一次） */
+    private void showSessionExpiredNotification(String lastUserName) {
+        String who = (lastUserName != null && !lastUserName.isEmpty())
+                ? "「" + lastUserName + "」的" : "";
+        JOptionPane.showMessageDialog(
+            this,
+            "<html><b>Tronclass 登入已失效</b><br><br>"
+            + who + "Cookie 已過期或被登出。<br>"
+            + "請點擊右上角「重新登入」以繼續同步資料。</html>",
+            "登入已失效",
+            JOptionPane.WARNING_MESSAGE
+        );
+    }
+
+    /** 確認登出彈窗 */
+    private void confirmLogout() {
+        int choice = JOptionPane.showConfirmDialog(
+            this,
+            "<html>確定要登出 Tronclass 嗎？<br>"
+            + "<span style='color:#6B6A67;font-size:11px'>本機的代辦事項資料不會被刪除。</span></html>",
+            "確認登出",
+            JOptionPane.YES_NO_OPTION,
+            JOptionPane.QUESTION_MESSAGE
+        );
+        if (choice == JOptionPane.YES_OPTION) {
+            sessionManager.logout();
+        }
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // 背景定時驗證 cookie
+    // ══════════════════════════════════════════════════════════════════════════
+
+    private void validateCookieInBackground() {
+        if (!sessionManager.isLoggedIn()) return;
+        String cookie = sessionManager.getCookie();
+        if (cookie == null) return;
+
+        // 在背景執行，不阻塞 EDT
+        new Thread(() -> {
+            boolean valid = TronclassService.validateCookie(cookie);
+            if (!valid) {
+                // notifySessionExpired 已經在 EDT 上執行 listener
+                sessionManager.notifySessionExpired();
+            }
+        }).start();
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // 開啟登入 Dialog
+    // ══════════════════════════════════════════════════════════════════════════
+
     private void openLoginDialog() {
         List<TodoItem> todos = todoPanel.getTodos();
 
         TronclassLoginDialog dlg = new TronclassLoginDialog(
-            this, todos, saveTodosCallback,
+            this, todos, saveTodosCallback, sessionManager,
             (name, cookie, added) -> {
                 SwingUtilities.invokeLater(() -> {
-                    loggedInName   = name;
-                    loggedInCookie = cookie;
-                    updateTopbarUser(name);
                     todoPanel.refreshList();
-
-                    String userName = name != null ? name : "使用者";
+                    String displayName = (name != null) ? name : "使用者";
                     String msg = added > 0
-                        ? "✓ 已同步 " + added + " 筆待辦事項到「代辦事項」頁面。"
-                        : "✓ 登入成功，無新的待辦事項。";
+                        ? "已同步 " + added + " 筆待辦事項到「代辦事項」頁面。"
+                        : "登入成功，無新的待辦事項。";
                     JOptionPane.showMessageDialog(this,
-                        "<html><b>" + userName + "</b> 您好！<br>" + msg + "</html>",
+                        "<html><b>" + displayName + "</b> 您好！<br>" + msg + "</html>",
                         "Tronclass 同步完成",
                         JOptionPane.INFORMATION_MESSAGE);
                 });
@@ -197,24 +353,37 @@ public class MainFrame extends JFrame {
         dlg.setVisible(true);
     }
 
-    private void updateTopbarUser(String name) {
-        if (name != null && !name.isEmpty()) {
-            String initial = name.substring(0, 1);
-            topbarAvatarLabel.setText(initial);
-            topbarHintLabel.setText(name);
-            topbarHintLabel.setForeground(AppColors.TEXT_PRIMARY);
-            topbarHintLabel.setFont(AppFonts.BODY_SMALL);
-        } else {
-            topbarAvatarLabel.setText("✓");
-            topbarHintLabel.setText("已登入");
-            topbarHintLabel.setForeground(AppColors.SUCCESS);
-        }
-        loginBtn.setText("重新同步");
-        loginBtn.setBackground(AppColors.BG_TERTIARY);
-        loginBtn.setForeground(AppColors.TEXT_PRIMARY);
+    // ══════════════════════════════════════════════════════════════════════════
+    // Topbar 小工具
+    // ══════════════════════════════════════════════════════════════════════════
+
+    private JLabel makeAvatar(String text) {
+        JLabel l = new JLabel(text, SwingConstants.CENTER);
+        l.setFont(AppFonts.BODY_SMALL);
+        l.setForeground(AppColors.ACCENT_TEXT);
+        l.setBackground(AppColors.ACCENT_LIGHT);
+        l.setOpaque(true);
+        l.setPreferredSize(new Dimension(32, 32));
+        l.setBorder(new LineBorder(AppColors.ACCENT, 1));
+        return l;
     }
 
-    // ── Sidebar ────────────────────────────────────────────────────────────
+    private JButton topbarBtn(String text, Color bg, Color fg) {
+        JButton b = new JButton(text);
+        b.setFont(AppFonts.CAPTION);
+        b.setBackground(bg);
+        b.setForeground(fg);
+        b.setBorder(new EmptyBorder(5, 12, 5, 12));
+        b.setFocusPainted(false);
+        b.setOpaque(true);
+        b.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        return b;
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // Sidebar
+    // ══════════════════════════════════════════════════════════════════════════
+
     private JPanel buildSidebar() {
         JPanel sb = new JPanel();
         sb.setLayout(new BoxLayout(sb, BoxLayout.Y_AXIS));
@@ -249,7 +418,7 @@ public class MainFrame extends JFrame {
         sb.add(sep);
         sb.add(Box.createRigidArea(new Dimension(0, 8)));
 
-        JLabel ver = new JLabel("  v0.5  早期預覽版");
+        JLabel ver = new JLabel("  v0.6  早期預覽版");
         ver.setFont(AppFonts.CAPTION);
         ver.setForeground(AppColors.TEXT_TERTIARY);
         ver.setAlignmentX(Component.LEFT_ALIGNMENT);
@@ -258,7 +427,6 @@ public class MainFrame extends JFrame {
 
         activeNav = calNav;
         calNav.setActive(true);
-
         return sb;
     }
 
@@ -280,6 +448,7 @@ public class MainFrame extends JFrame {
     }
 
     // ── NavItem ────────────────────────────────────────────────────────────
+
     static class NavItem extends JPanel {
         private boolean active  = false;
         private boolean hovered = false;
@@ -317,8 +486,7 @@ public class MainFrame extends JFrame {
             repaint();
         }
 
-        @Override
-        protected void paintComponent(Graphics g) {
+        @Override protected void paintComponent(Graphics g) {
             Graphics2D g2 = (Graphics2D) g.create();
             g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
             Color bg = active ? AppColors.NAV_ACTIVE_BG : hovered ? AppColors.NAV_HOVER_BG : null;

@@ -6,8 +6,14 @@ import java.util.regex.*;
 
 /**
  * TronclassService：整合登入 Cookie 後的資料同步。
- *  - parseName()     從首頁 HTML 解析使用者姓名
- *  - syncTodos()     抓取待辦事項並合併寫入 todos.xml
+ *  - parseName()       從首頁 HTML 解析使用者姓名
+ *  - syncTodos()       抓取待辦事項並合併寫入 todos.xml
+ *  - validateCookie()  主動驗證 cookie 是否仍有效
+ *
+ * v0.6 變更：
+ *  - 所有 HTTP 呼叫遇到 redirect 到登入頁時，統一拋出 SessionExpiredException
+ *  - 新增 SessionExpiredException（受檢例外，強制呼叫端處理）
+ *  - 新增 validateCookie()，供背景定時器使用
  */
 public class TronclassService {
 
@@ -29,40 +35,44 @@ public class TronclassService {
     private static final List<String> FILTER_KEYWORDS =
         Arrays.asList("工程認證", "COVID", "COVID-19");
 
-    // ── 公開 API ────────────────────────────────────────────────────────────
+    // ── 自訂例外 ─────────────────────────────────────────────────────────────
+
+    /** Cookie 已失效或被登出時拋出。 */
+    public static class SessionExpiredException extends Exception {
+        public SessionExpiredException() { super("SESSION_EXPIRED"); }
+        public SessionExpiredException(String msg) { super(msg); }
+    }
+
+    // ── 公開 API ─────────────────────────────────────────────────────────────
 
     /**
      * 從首頁 HTML 解析登入後的使用者姓名。
-     * 嘗試多種常見的 HTML 模式（ng-init、JSON、data-name 等）。
      *
      * @param cookie 已登入的 Cookie 字串
-     * @return 使用者姓名，若解析失敗則回傳 null
+     * @return 使用者姓名；null 表示解析失敗但 cookie 仍有效
+     * @throws SessionExpiredException cookie 已失效
+     * @throws Exception               網路或其他錯誤
      */
-    public static String parseName(String cookie) throws Exception {
+    public static String parseName(String cookie) throws SessionExpiredException, Exception {
         String html = get(BASE_URL + "/user/index", cookie);
         if (html == null || html.length() < 100) return null;
 
-        // 1. ng-init="userCurrentName='林昱安'"
         Pattern p1 = Pattern.compile("userCurrentName\\s*=\\s*'([^']+)'");
         Matcher m1 = p1.matcher(html);
         if (m1.find()) return m1.group(1).trim();
 
-        // 2. "userCurrentName":"林昱安"  （JSON 格式）
         Pattern p2 = Pattern.compile("\"userCurrentName\"\\s*:\\s*\"([^\"]+)\"");
         Matcher m2 = p2.matcher(html);
         if (m2.find()) return m2.group(1).trim();
 
-        // 3. id="userCurrentName"...>林昱安<
         Pattern p3 = Pattern.compile("id=[\"']userCurrentName[\"'][^>]*>([^<]+)<");
         Matcher m3 = p3.matcher(html);
         if (m3.find()) return m3.group(1).trim();
 
-        // 4. span ...ng-bind="currentUserName"...>林昱安<
         Pattern p4 = Pattern.compile("ng-bind=[\"']currentUserName[\"'][^>]*>([^<]+)<");
         Matcher m4 = p4.matcher(html);
         if (m4.find()) return m4.group(1).trim();
 
-        // 5. data-name="林昱安"
         Pattern p5 = Pattern.compile("data-name=[\"']([^\"']+)[\"']");
         Matcher m5 = p5.matcher(html);
         if (m5.find()) return m5.group(1).trim();
@@ -71,25 +81,44 @@ public class TronclassService {
     }
 
     /**
+     * 主動驗證 cookie 是否仍有效（向首頁發送輕量請求）。
+     *
+     * @param cookie 要驗證的 Cookie 字串
+     * @return true = 有效；false = 失效
+     */
+    public static boolean validateCookie(String cookie) {
+        if (cookie == null || cookie.isEmpty()) return false;
+        try {
+            get(BASE_URL + "/user/index", cookie);
+            return true;
+        } catch (SessionExpiredException e) {
+            return false;
+        } catch (Exception e) {
+            // 網路錯誤：不確定，維持已登入狀態
+            return true;
+        }
+    }
+
+    /**
      * 從 Tronclass 取得待辦事項，並合併寫入 data/todos.xml。
      *
-     * @param cookie 已登入的 Cookie 字串
+     * @param cookie       已登入的 Cookie 字串
+     * @param currentTodos 現有待辦事項清單（會直接修改）
+     * @param saveCallback 儲存回調
      * @return 新增的待辦事項數量；-1 表示找不到 API
+     * @throws SessionExpiredException cookie 已失效
+     * @throws Exception               網路或其他錯誤
      */
     public static int syncTodos(String cookie, java.util.List<TodoItem> currentTodos,
-                                 Runnable saveCallback) throws Exception {
-        // 1. 找可用的 API 路徑
+                                 Runnable saveCallback) throws SessionExpiredException, Exception {
         String endpoint = findWorkingEndpoint(cookie);
         if (endpoint == null) return -1;
 
-        // 2. 取得 JSON
         String json = get(BASE_URL + endpoint, cookie);
         if (json == null) return -1;
 
-        // 3. 解析
         List<TronclassTodo> fetched = parseTodos(json);
 
-        // 4. 收集現有 titles（避免重複）
         Set<String> existingTitles = new HashSet<>();
         int maxId = 0;
         for (TodoItem t : currentTodos) {
@@ -97,7 +126,6 @@ public class TronclassService {
             maxId = Math.max(maxId, t.getId());
         }
 
-        // 5. 合併新資料
         int added = 0;
         for (TronclassTodo tt : fetched) {
             if (existingTitles.contains(tt.title)) continue;
@@ -107,14 +135,13 @@ public class TronclassService {
             added++;
         }
 
-        // 6. 通知儲存
         if (added > 0 && saveCallback != null) saveCallback.run();
         return added;
     }
 
-    // ── 內部邏輯 ────────────────────────────────────────────────────────────
+    // ── 內部邏輯 ─────────────────────────────────────────────────────────────
 
-    private static String findWorkingEndpoint(String cookie) {
+    private static String findWorkingEndpoint(String cookie) throws SessionExpiredException {
         for (String path : TODO_CANDIDATES) {
             try {
                 String resp = get(BASE_URL + path, cookie);
@@ -122,6 +149,8 @@ public class TronclassService {
                     (resp.contains("[") || resp.contains("\"data\""))) {
                     return path;
                 }
+            } catch (SessionExpiredException e) {
+                throw e; // 直接向上傳遞
             } catch (Exception ignored) {}
         }
         return null;
@@ -233,7 +262,10 @@ public class TronclassService {
 
     // ── HTTP GET ─────────────────────────────────────────────────────────────
 
-    static String get(String urlString, String cookie) throws Exception {
+    /**
+     * 執行 HTTP GET，遇到 redirect 到登入頁時拋出 SessionExpiredException。
+     */
+    static String get(String urlString, String cookie) throws SessionExpiredException, Exception {
         HttpURLConnection conn = (HttpURLConnection) new URL(urlString).openConnection();
         conn.setRequestMethod("GET");
         conn.setConnectTimeout(10_000);
@@ -249,9 +281,13 @@ public class TronclassService {
         int code = conn.getResponseCode();
         if (code == 301 || code == 302) {
             String loc = conn.getHeaderField("Location");
-            if (loc != null && (loc.contains("cas") || loc.contains("login")))
-                throw new RuntimeException("SESSION_EXPIRED");
+            if (loc != null && (loc.contains("cas") || loc.contains("login"))) {
+                throw new SessionExpiredException();
+            }
             return null;
+        }
+        if (code == 401 || code == 403) {
+            throw new SessionExpiredException("HTTP " + code);
         }
         if (code != 200) return null;
 
@@ -261,7 +297,13 @@ public class TronclassService {
             String line;
             while ((line = br.readLine()) != null) sb.append(line).append("\n");
         }
-        return sb.toString();
+
+        // 某些平台直接回 200 但 HTML 已是登入頁
+        String body = sb.toString();
+        if (body.contains("cas.ntou.edu.tw") || body.contains("/user/login")) {
+            throw new SessionExpiredException("Redirected to login page");
+        }
+        return body;
     }
 
     // ── 內部 DTO ─────────────────────────────────────────────────────────────
