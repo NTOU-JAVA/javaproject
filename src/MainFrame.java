@@ -103,7 +103,7 @@ public class MainFrame extends JFrame {
         // 監聽 Session 狀態變化
         sessionManager.addListener((state, userName) -> onSessionStateChanged(state, userName));
 
-        // 啟動背景定時驗證（15 分鐘）
+        // 啟動背景定時驗證（2 分鐘）
         cookieValidationTimer = new Timer(2 * 60 * 1000, e -> validateCookieInBackground());
         cookieValidationTimer.start();
     }
