@@ -60,7 +60,7 @@ public class MainFrame extends JFrame {
             saveTasksCallback.run();
         });
 
-        calendarPanel = new CalendarPanel(tasks, categoryManager);
+        calendarPanel = new CalendarPanel(tasks, categoryManager, saveTasksCallback);
         todoPanel     = new TodoPanel(todos, saveTodosCallback, categoryManager);
         newsPanel     = new SchoolNewsPanel();
         schedulePanel = new SchedulePanel(schedules, saveSchedulesCallback);

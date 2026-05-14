@@ -22,6 +22,7 @@ public class CalendarPanel extends JPanel {
     private LocalDate        weekStart;
     private final List<Task> tasks;
     private final CategoryManager categoryManager;
+    private final Runnable saveCallback;
 
     // 目前選取的分類篩選
     private String currentFilter = CategoryManager.ALL;
@@ -32,9 +33,10 @@ public class CalendarPanel extends JPanel {
     private TaskPopover currentPopover = null;
     private ComponentListener windowResizeListener = null;
 
-    public CalendarPanel(List<Task> tasks, CategoryManager categoryManager) {
+    public CalendarPanel(List<Task> tasks, CategoryManager categoryManager, Runnable saveCallback) {
         this.tasks           = tasks;
         this.categoryManager = categoryManager;
+        this.saveCallback    = saveCallback;
 
         LocalDate today = LocalDate.now();
         int dow = today.getDayOfWeek().getValue() % 7;
@@ -350,6 +352,7 @@ public class CalendarPanel extends JPanel {
                 tasks.remove(task);
                 closePopover();
                 updateCalendar();
+                saveCallback.run();
             },
             this::closePopover
         );
@@ -841,6 +844,7 @@ public class CalendarPanel extends JPanel {
             }
             dlg.dispose();
             updateCalendar();
+            saveCallback.run();
         });
 
         dlg.setVisible(true);
