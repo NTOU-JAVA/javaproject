@@ -1,7 +1,12 @@
-import javax.swing.*;
-import javax.swing.border.*;
+package ui;
+
 import java.awt.*;
 import java.net.URI;
+import javax.swing.*;
+import javax.swing.border.*;
+import model.TodoItem;
+import service.SessionManager;
+import service.TronclassService;
 
 /**
  * TronclassLoginDialog：Tronclass 登入流程視窗。

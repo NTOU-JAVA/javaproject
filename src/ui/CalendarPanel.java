@@ -1,5 +1,5 @@
-import javax.swing.*;
-import javax.swing.border.*;
+package ui;
+
 import java.awt.*;
 import java.awt.event.*;
 import java.time.LocalDate;
@@ -8,6 +8,10 @@ import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.*;
 import java.util.List;
+import javax.swing.*;
+import javax.swing.border.*;
+import model.Task;
+import service.CategoryManager;
 
 public class CalendarPanel extends JPanel {
 

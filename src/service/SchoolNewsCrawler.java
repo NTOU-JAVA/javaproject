@@ -1,8 +1,11 @@
+package service;
+
+import java.util.*;
+import model.NewsItem;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
-import java.util.*;
 
 /**
  * SchoolNewsCrawler：從學校網站爬取公告資訊。

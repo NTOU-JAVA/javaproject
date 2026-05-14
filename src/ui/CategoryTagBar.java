@@ -1,9 +1,12 @@
-import javax.swing.*;
-import javax.swing.border.*;
+package ui;
+
 import java.awt.*;
 import java.awt.event.*;
 import java.util.List;
 import java.util.function.Consumer;
+import javax.swing.*;
+import javax.swing.border.*;
+import service.CategoryManager;
 
 /**
  * CategoryTagBar：頂部分類 Tag 篩選列。

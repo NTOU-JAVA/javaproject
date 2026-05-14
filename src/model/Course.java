@@ -1,3 +1,5 @@
+package model;
+
 /**
  * Course 表示課表中的一門課程。
  */

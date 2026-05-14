@@ -1,3 +1,5 @@
+package model;
+
 /**
  * TodoItem 表示一筆代辦事項。
  * 新增：title（標題）、description（詳細說明）、category（分類）

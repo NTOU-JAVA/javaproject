@@ -1,8 +1,16 @@
-import javax.swing.*;
-import javax.swing.border.*;
+package ui;
+
 import java.awt.*;
 import java.awt.event.*;
 import java.util.List;
+import javax.swing.*;
+import javax.swing.border.*;
+import model.Schedule;
+import model.Task;
+import model.TodoItem;
+import service.CategoryManager;
+import service.SessionManager;
+import service.TronclassService;
 
 /**
  * MainFrame：主視窗，含 Topbar、Sidebar、CardLayout 內容區。

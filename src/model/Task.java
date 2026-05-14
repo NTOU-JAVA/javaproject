@@ -1,3 +1,5 @@
+package model;
+
 /**
  * Task 表示一筆行事曆任務。
  * 新增：title（標題）、description（詳細內容）、completed（完成狀態）、category（分類）

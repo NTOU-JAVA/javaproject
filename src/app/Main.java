@@ -1,6 +1,14 @@
-import javax.swing.*;
+package app;
+
 import java.util.ArrayList;
 import java.util.List;
+import javax.swing.*;
+import model.Schedule;
+import model.Task;
+import model.TodoItem;
+import persistence.XmlDataStore;
+import service.CategoryManager;
+import ui.MainFrame;
 
 /**
  * Main：應用程式進入點，負責初始化資料與 UI。

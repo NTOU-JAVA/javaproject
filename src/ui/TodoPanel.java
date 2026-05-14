@@ -1,11 +1,14 @@
-import javax.swing.*;
-import javax.swing.border.*;
+package ui;
 import java.awt.*;
 import java.awt.event.*;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.List;
+import javax.swing.*;
+import javax.swing.border.*;
+import model.TodoItem;
+import service.CategoryManager;
 
 /**
  * TodoPanel：代辦事項面板。

@@ -1,3 +1,5 @@
+package model;
+
 /**
  * NewsItem 表示一筆學校公告。
  */

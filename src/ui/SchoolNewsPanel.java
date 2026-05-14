@@ -1,9 +1,13 @@
-import javax.swing.*;
-import javax.swing.border.*;
+package ui;
+
 import java.awt.*;
 import java.awt.event.*;
 import java.net.URI;
 import java.util.List;
+import javax.swing.*;
+import javax.swing.border.*;
+import model.NewsItem;
+import service.SchoolNewsCrawler;
 
 /**
  * SchoolNewsPanel：顯示學校公告的面板。

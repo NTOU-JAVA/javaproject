@@ -1,7 +1,9 @@
-import javax.swing.*;
+package service;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Consumer;
+import javax.swing.*;
 
 /**
  * SessionManager：集中管理 Tronclass 登入狀態。

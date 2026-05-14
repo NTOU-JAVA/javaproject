@@ -1,8 +1,11 @@
+package service;
+
 import java.io.*;
 import java.net.*;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.regex.*;
+import model.TodoItem;
 
 /**
  * TronclassService：整合登入 Cookie 後的資料同步。

@@ -1,14 +1,20 @@
+package persistence;
+
+import java.io.File;
+import java.util.List;
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.transform.Transformer;
 import javax.xml.transform.TransformerFactory;
 import javax.xml.transform.dom.DOMSource;
 import javax.xml.transform.stream.StreamResult;
+import model.Course;
+import model.Schedule;
+import model.Task;
+import model.TodoItem;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.NodeList;
-import java.io.File;
-import java.util.List;
 
 /**
  * XmlDataStore：集中處理主要資料模型的 XML 載入與儲存。
