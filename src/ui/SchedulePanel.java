@@ -2,6 +2,7 @@ package ui;
 
 import java.awt.*;
 import java.awt.event.*;
+import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
 import javax.swing.*;
@@ -11,6 +12,7 @@ import javax.swing.plaf.basic.BasicComboPopup;
 import javax.swing.plaf.basic.ComboPopup;
 import model.Course;
 import model.Schedule;
+import service.PdfScheduleImporter;
 
 /**
  * SchedulePanel：課表功能主面板。
@@ -64,6 +66,7 @@ public class SchedulePanel extends JPanel {
     private JButton             deleteBtn;
     private JButton             renameBtn;
     private JButton             addCourseBtn;
+    private JButton             importPdfBtn;
     private JPanel              topControlPanel;
     private CardLayout          topCardLayout;
 
@@ -196,6 +199,16 @@ public class SchedulePanel extends JPanel {
         left.add(addScheduleBtn);
         left.add(topControlPanel);
 
+        importPdfBtn = new JButton("匯入 PDF");
+        importPdfBtn.setFont(AppFonts.BODY_SMALL);
+        importPdfBtn.setBackground(AppColors.BG_TERTIARY);
+        importPdfBtn.setForeground(AppColors.TEXT_PRIMARY);
+        importPdfBtn.setBorder(new EmptyBorder(7, 14, 7, 14));
+        importPdfBtn.setFocusPainted(false);
+        importPdfBtn.setOpaque(true);
+        importPdfBtn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        importPdfBtn.addActionListener(e -> importScheduleFromPdf());
+
         addCourseBtn = new JButton("+ 新增課程");
         addCourseBtn.setFont(AppFonts.BODY_SMALL);
         addCourseBtn.setBackground(AppColors.ACCENT);
@@ -213,8 +226,13 @@ public class SchedulePanel extends JPanel {
             showCourseDialog(null);
         });
 
-        nav.add(left,         BorderLayout.WEST);
-        nav.add(addCourseBtn, BorderLayout.EAST);
+        JPanel right = new JPanel(new FlowLayout(FlowLayout.RIGHT, 6, 0));
+        right.setOpaque(false);
+        right.add(importPdfBtn);
+        right.add(addCourseBtn);
+
+        nav.add(left,  BorderLayout.WEST);
+        nav.add(right, BorderLayout.EAST);
         refreshScheduleButtons();
         return nav;
     }
@@ -327,6 +345,146 @@ public class SchedulePanel extends JPanel {
         for (Schedule s : schedules) scheduleCombo.addItem(s);
         if (activeSchedule != null) scheduleCombo.setSelectedItem(activeSchedule);
         comboUpdating = false;
+    }
+
+    private void importScheduleFromPdf() {
+        File selectedFile = showPdfFileChooserDialog();
+        if (selectedFile == null) return;
+
+        int nextId = schedules.isEmpty() ? 1
+                : schedules.stream().mapToInt(Schedule::getId).max().orElse(0) + 1;
+
+        try {
+            Schedule imported = new PdfScheduleImporter().importSchedule(selectedFile, nextId);
+            schedules.add(imported);
+            switchSchedule(imported);
+            saveCallback.run();
+            showImportResultDialog(
+                    "匯入完成",
+                    "已建立新課表「" + imported.getName() + "」。",
+                    "共匯入 " + imported.getCourses().size() + " 門課程。",
+                    AppColors.ACCENT);
+        } catch (Exception ex) {
+            showImportResultDialog(
+                    "無法匯入課表",
+                    "PDF 解析時遇到問題。",
+                    ex.getMessage(),
+                    AppColors.DANGER);
+        }
+    }
+
+    private File showPdfFileChooserDialog() {
+        Window owner = SwingUtilities.getWindowAncestor(this);
+        JDialog dlg = new JDialog(owner, "", Dialog.ModalityType.APPLICATION_MODAL);
+        JPanel root = buildFloatingRoot(dlg, "匯入課表 PDF", AppColors.ACCENT);
+
+        JFileChooser chooser = new JFileChooser();
+        chooser.setControlButtonsAreShown(false);
+        chooser.setAcceptAllFileFilterUsed(false);
+        chooser.setFileFilter(new javax.swing.filechooser.FileNameExtensionFilter("PDF 檔案", "pdf"));
+        styleFileChooser(chooser);
+
+        JPanel chooserWrap = new JPanel(new BorderLayout());
+        chooserWrap.setOpaque(false);
+        chooserWrap.setBorder(new EmptyBorder(12, 14, 12, 14));
+        chooserWrap.add(chooser, BorderLayout.CENTER);
+
+        final File[] selected = { null };
+        JPanel btnRow = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 10));
+        btnRow.setBackground(new Color(0xFAF9F7));
+        btnRow.setOpaque(true);
+        btnRow.setBorder(new MatteBorder(1, 0, 0, 0, AppColors.BORDER_DEFAULT));
+
+        JButton cancelBtn = dialogButton("取消", AppColors.BG_TERTIARY, AppColors.TEXT_SECONDARY);
+        JButton importBtn = dialogButton("匯入", AppColors.ACCENT, Color.WHITE);
+        cancelBtn.addActionListener(e -> dlg.dispose());
+        Runnable approveSelection = () -> {
+            File file = chooser.getSelectedFile();
+            if (file == null) {
+                Toolkit.getDefaultToolkit().beep();
+                return;
+            }
+            selected[0] = file;
+            dlg.dispose();
+        };
+        importBtn.addActionListener(e -> approveSelection.run());
+        chooser.addActionListener(e -> {
+            if (JFileChooser.APPROVE_SELECTION.equals(e.getActionCommand())) {
+                approveSelection.run();
+            } else if (JFileChooser.CANCEL_SELECTION.equals(e.getActionCommand())) {
+                dlg.dispose();
+            }
+        });
+        btnRow.add(cancelBtn);
+        btnRow.add(importBtn);
+
+        root.add(chooserWrap, BorderLayout.CENTER);
+        root.add(btnRow, BorderLayout.SOUTH);
+        dlg.getRootPane().setDefaultButton(importBtn);
+        dlg.pack();
+        dlg.setSize(Math.max(760, dlg.getWidth()), Math.max(500, dlg.getHeight()));
+        dlg.setLocationRelativeTo(this);
+        dlg.setVisible(true);
+        return selected[0];
+    }
+
+    private void styleFileChooser(JFileChooser chooser) {
+        chooser.setBackground(AppColors.BG_SECONDARY);
+        chooser.setForeground(AppColors.TEXT_PRIMARY);
+        chooser.setFont(AppFonts.BODY_SMALL);
+        chooser.setBorder(new EmptyBorder(8, 8, 8, 8));
+        styleChooserTree(chooser);
+    }
+
+    private void styleChooserTree(Component component) {
+        component.setFont(AppFonts.BODY_SMALL);
+        if (component instanceof JPanel panel) {
+            panel.setBackground(AppColors.BG_SECONDARY);
+        } else if (component instanceof JLabel label) {
+            label.setForeground(AppColors.TEXT_SECONDARY);
+        } else if (component instanceof JButton button) {
+            button.setFocusPainted(false);
+            button.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+            String text = button.getText();
+            if (text == null || text.isBlank()) {
+                button.setBorder(new EmptyBorder(4, 5, 4, 5));
+                button.setContentAreaFilled(false);
+                button.setForeground(AppColors.TEXT_SECONDARY);
+            } else {
+                boolean approve = "匯入".equals(text);
+                button.setBorder(new EmptyBorder(5, 12, 5, 12));
+                button.setBackground(approve ? AppColors.ACCENT : AppColors.BG_TERTIARY);
+                button.setForeground(approve ? Color.WHITE : AppColors.TEXT_PRIMARY);
+                button.setOpaque(true);
+            }
+        } else if (component instanceof JTextField field) {
+            field.setBackground(Color.WHITE);
+            field.setForeground(AppColors.TEXT_PRIMARY);
+            field.setBorder(BorderFactory.createCompoundBorder(
+                    new LineBorder(AppColors.BORDER_DEFAULT, 1, true),
+                    new EmptyBorder(5, 8, 5, 8)));
+        } else if (component instanceof JList<?> list) {
+            list.setBackground(Color.WHITE);
+            list.setForeground(AppColors.TEXT_PRIMARY);
+            list.setSelectionBackground(AppColors.ACCENT_LIGHT);
+            list.setSelectionForeground(AppColors.ACCENT);
+        } else if (component instanceof JTable table) {
+            table.setBackground(Color.WHITE);
+            table.setForeground(AppColors.TEXT_PRIMARY);
+            table.setSelectionBackground(AppColors.ACCENT_LIGHT);
+            table.setSelectionForeground(AppColors.ACCENT);
+        } else if (component instanceof JComboBox<?> combo) {
+            applyComboStyle(combo);
+        } else if (component instanceof JScrollPane scrollPane) {
+            scrollPane.setBorder(new LineBorder(AppColors.BORDER_DEFAULT, 1, true));
+            AppUIManager.applySlimScrollBar(scrollPane);
+        }
+
+        if (component instanceof Container container) {
+            for (Component child : container.getComponents()) {
+                styleChooserTree(child);
+            }
+        }
     }
 
     private void refreshScheduleButtons() {
@@ -997,6 +1155,112 @@ public class SchedulePanel extends JPanel {
         btnRow.add(okBtn);
         dlg.getRootPane().setDefaultButton(okBtn);
         return btnRow;
+    }
+
+    private JButton dialogButton(String text, Color bg, Color fg) {
+        JButton button = new JButton(text);
+        button.setFont(AppFonts.BODY_SMALL);
+        button.setBackground(bg);
+        button.setForeground(fg);
+        button.setBorder(new EmptyBorder(6, 18, 6, 18));
+        button.setFocusPainted(false);
+        button.setOpaque(true);
+        button.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        return button;
+    }
+
+    private void showImportResultDialog(String title, String message, String detail, Color accentColor) {
+        Window owner = SwingUtilities.getWindowAncestor(this);
+        JDialog dlg = new JDialog(owner, "", Dialog.ModalityType.APPLICATION_MODAL);
+        JPanel root = buildFloatingRoot(dlg, title, accentColor);
+
+        JPanel content = new JPanel(new BorderLayout(12, 0));
+        content.setOpaque(false);
+        content.setBorder(new EmptyBorder(18, 18, 18, 18));
+
+        JPanel icon = new JPanel() {
+            @Override protected void paintComponent(Graphics g) {
+                Graphics2D g2 = (Graphics2D) g.create();
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                g2.setColor(blendWithWhite(accentColor, 0.12f));
+                g2.fillOval(0, 0, getWidth(), getHeight());
+                g2.setColor(accentColor);
+                g2.setStroke(new BasicStroke(1.5f));
+                g2.drawOval(1, 1, getWidth() - 3, getHeight() - 3);
+                g2.setStroke(new BasicStroke(2.4f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+                int w = getWidth();
+                int h = getHeight();
+                if (accentColor == AppColors.DANGER) {
+                    int cx = w / 2;
+                    g2.drawLine(cx, h / 4, cx, h / 2 + 4);
+                    g2.fillOval(cx - 1, h - 11, 3, 3);
+                } else {
+                    g2.drawLine(w / 4 + 1, h / 2 + 1, w / 2 - 3, h * 3 / 4 - 3);
+                    g2.drawLine(w / 2 - 3, h * 3 / 4 - 3, w * 3 / 4 + 2, h / 3);
+                }
+                g2.dispose();
+            }
+        };
+        icon.setOpaque(false);
+        icon.setPreferredSize(new Dimension(38, 38));
+
+        JPanel textCol = new JPanel();
+        textCol.setLayout(new BoxLayout(textCol, BoxLayout.Y_AXIS));
+        textCol.setOpaque(false);
+
+        JTextArea messageArea = new JTextArea(message);
+        messageArea.setFont(AppFonts.BODY_MEDIUM);
+        messageArea.setForeground(AppColors.TEXT_PRIMARY);
+        messageArea.setEditable(false);
+        messageArea.setFocusable(false);
+        messageArea.setLineWrap(true);
+        messageArea.setWrapStyleWord(true);
+        messageArea.setOpaque(false);
+        messageArea.setBorder(null);
+        messageArea.setAlignmentX(Component.LEFT_ALIGNMENT);
+        textCol.add(messageArea);
+
+        if (detail != null && !detail.isBlank()) {
+            textCol.add(Box.createRigidArea(new Dimension(0, 6)));
+            JTextArea detailArea = new JTextArea(detail);
+            detailArea.setFont(AppFonts.BODY_SMALL);
+            detailArea.setForeground(AppColors.TEXT_SECONDARY);
+            detailArea.setEditable(false);
+            detailArea.setFocusable(false);
+            detailArea.setLineWrap(true);
+            detailArea.setWrapStyleWord(true);
+            detailArea.setOpaque(false);
+            detailArea.setBorder(null);
+            detailArea.setAlignmentX(Component.LEFT_ALIGNMENT);
+            textCol.add(detailArea);
+        }
+
+        content.add(icon, BorderLayout.WEST);
+        content.add(textCol, BorderLayout.CENTER);
+
+        JPanel btnRow = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 10));
+        btnRow.setBackground(new Color(0xFAF9F7));
+        btnRow.setOpaque(true);
+        btnRow.setBorder(new MatteBorder(1, 0, 0, 0, AppColors.BORDER_DEFAULT));
+
+        JButton okBtn = new JButton("知道了");
+        okBtn.setFont(AppFonts.BODY_SMALL);
+        okBtn.setBackground(accentColor);
+        okBtn.setForeground(Color.WHITE);
+        okBtn.setBorder(new EmptyBorder(6, 18, 6, 18));
+        okBtn.setFocusPainted(false);
+        okBtn.setOpaque(true);
+        okBtn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        okBtn.addActionListener(e -> dlg.dispose());
+        btnRow.add(okBtn);
+
+        root.add(content, BorderLayout.CENTER);
+        root.add(btnRow, BorderLayout.SOUTH);
+        dlg.getRootPane().setDefaultButton(okBtn);
+        dlg.pack();
+        dlg.setSize(Math.max(380, dlg.getWidth()), dlg.getHeight());
+        dlg.setLocationRelativeTo(this);
+        dlg.setVisible(true);
     }
 
     private Color blendWithWhite(Color c, float ratio) {
