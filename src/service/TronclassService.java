@@ -112,8 +112,12 @@ public class TronclassService {
      * @throws SessionExpiredException cookie 已失效
      * @throws Exception               網路或其他錯誤
      */
-    public static int syncTodos(String cookie, java.util.List<TodoItem> currentTodos,
-                                 Runnable saveCallback) throws SessionExpiredException, Exception {
+    // 在 TronclassService.java 中修改 syncTodos 方法
+
+    public static int syncTodos(String cookie, java.util.List<TodoItem> currentTodos, 
+                                CategoryManager categoryManager, Runnable saveCallback) 
+                                throws SessionExpiredException, Exception {
+        
         String endpoint = findWorkingEndpoint(cookie);
         if (endpoint == null) return -1;
 
@@ -132,14 +136,30 @@ public class TronclassService {
         int added = 0;
         for (TronclassTodo tt : fetched) {
             if (existingTitles.contains(tt.title)) continue;
+            
             maxId++;
+            String mappedCategory = mapToCategory(tt.type);
+            
             TodoItem item = new TodoItem(maxId, tt.title, "", formatDeadline(tt.deadline));
+            item.setCategory(mappedCategory);
             currentTodos.add(item);
             added++;
         }
 
         if (added > 0 && saveCallback != null) saveCallback.run();
         return added;
+    }
+    private static String mapToCategory(String tronType) {
+        if (tronType == null) return "個人";
+        String type = tronType.toLowerCase();
+        if (type.contains("homework") || type.contains("作業") || type.contains("assignment")) {
+            return "作業";
+        } else if (type.contains("exam") || type.contains("考試") || type.contains("quiz") || type.contains("test")) {
+            return "考試";
+        } else if (type.contains("course") || type.contains("lecture") || type.contains("學習")) {
+            return "學習";
+        }
+        return "個人"; 
     }
 
     // ── 內部邏輯 ─────────────────────────────────────────────────────────────
@@ -185,14 +205,14 @@ public class TronclassService {
         String title = first(obj, "title", "name", "subject");
         if (title == null) return null;
         for (String kw : FILTER_KEYWORDS) {
-            if (title.contains(kw)) return null;
+            if (title.contains(kw)) return null; 
         }
         TronclassTodo item = new TronclassTodo();
         item.title    = title;
         item.type     = coalesce(first(obj, "type", "activity_type", "category"), "其他");
         item.deadline = coalesce(first(obj, "deadline", "end_time", "due_date", "end_at"), null);
         return item;
-    }
+}
 
     private static String first(String obj, String... keys) {
         for (String key : keys) {

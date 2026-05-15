@@ -33,6 +33,7 @@ public class TronclassLoginDialog extends JDialog {
 
     private final LoginCallback     callback;
     private final SessionManager    sessionManager;
+    private final service.CategoryManager categoryManager;
     private final java.util.List<TodoItem> currentTodos;
     private final Runnable          saveCallback;
 
@@ -44,11 +45,13 @@ public class TronclassLoginDialog extends JDialog {
                                 java.util.List<TodoItem> currentTodos,
                                 Runnable saveCallback,
                                 SessionManager sessionManager,
+                                service.CategoryManager categoryManager,
                                 LoginCallback callback) {
         super(owner, "", ModalityType.APPLICATION_MODAL);
         this.currentTodos   = currentTodos;
         this.saveCallback   = saveCallback;
         this.sessionManager = sessionManager;
+        this.categoryManager = categoryManager;
         this.callback       = callback;
 
         setUndecorated(true);
@@ -209,7 +212,7 @@ public class TronclassLoginDialog extends JDialog {
         new Thread(() -> {
             try {
                 String name  = TronclassService.parseName(cookie);
-                int    added = TronclassService.syncTodos(cookie, currentTodos, saveCallback);
+                int added = TronclassService.syncTodos(cookie, currentTodos, categoryManager, saveCallback);
 
                 SwingUtilities.invokeLater(() -> {
                     syncBtn.setEnabled(true);

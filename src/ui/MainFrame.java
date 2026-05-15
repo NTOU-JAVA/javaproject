@@ -37,6 +37,8 @@ public class MainFrame extends JFrame {
 
     private final Runnable saveTodosCallback;
 
+    private CategoryManager categoryManager;
+
     // ── Session 管理 ────────────────────────────────────────────────────────
     private final SessionManager sessionManager = new SessionManager();
 
@@ -343,7 +345,7 @@ public class MainFrame extends JFrame {
         List<TodoItem> todos = todoPanel.getTodos();
 
         TronclassLoginDialog dlg = new TronclassLoginDialog(
-            this, todos, saveTodosCallback, sessionManager,
+            this, todos, saveTodosCallback, sessionManager, categoryManager,
             (name, cookie, added) -> {
                 SwingUtilities.invokeLater(() -> {
                     todoPanel.refreshList();
