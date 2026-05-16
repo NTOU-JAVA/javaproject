@@ -9,6 +9,7 @@ import javax.xml.transform.TransformerFactory;
 import javax.xml.transform.dom.DOMSource;
 import javax.xml.transform.stream.StreamResult;
 import model.Course;
+import model.Reminder;
 import model.Schedule;
 import model.Task;
 import model.TodoItem;
@@ -51,6 +52,7 @@ public class XmlDataStore {
                 t.setImportant(Boolean.parseBoolean(getText(el, "important", "false")));
                 t.setCompleted(Boolean.parseBoolean(getText(el, "completed", "false")));
                 t.setCategory(category);
+                loadReminders(el, t);
                 tasks.add(t);
             }
         } catch (Exception e) {
@@ -70,10 +72,14 @@ public class XmlDataStore {
                 String title    = getText(el, "title", getText(el, "content", ""));
                 String desc     = getText(el, "description", "");
                 String rt       = getText(el, "reminderTime", "");
+                String deadline = getText(el, "deadlineTime", rt);
                 String category = getText(el, "category", "");
                 if (rt.isEmpty()) rt = null;
+                if (deadline.isEmpty()) deadline = null;
 
                 TodoItem item = new TodoItem(id, title, desc, rt);
+                item.setDeadlineTime(deadline);
+                item.setReminders(loadReminderList(el));
                 item.setCompleted(Boolean.parseBoolean(getText(el, "completed", "false")));
                 item.setCategory(category);
                 todos.add(item);
@@ -143,6 +149,7 @@ public class XmlDataStore {
                 appendText(doc, el, "important",   String.valueOf(t.isImportant()));
                 appendText(doc, el, "completed",   String.valueOf(t.isCompleted()));
                 appendText(doc, el, "category",    t.getCategory());
+                appendReminders(doc, el, t);
             }
             writeXML(doc, TASKS_XML);
         } catch (Exception e) {
@@ -162,8 +169,10 @@ public class XmlDataStore {
                 appendText(doc, el, "title",        t.getTitle());
                 appendText(doc, el, "description",  t.getDescription());
                 appendText(doc, el, "reminderTime", t.getReminderTime() != null ? t.getReminderTime() : "");
+                appendText(doc, el, "deadlineTime", t.getDeadlineTime() != null ? t.getDeadlineTime() : "");
                 appendText(doc, el, "completed",    String.valueOf(t.isCompleted()));
                 appendText(doc, el, "category",     t.getCategory());
+                appendReminders(doc, el, t.getReminders());
             }
             writeXML(doc, TODOS_XML);
         } catch (Exception e) {
@@ -232,6 +241,51 @@ public class XmlDataStore {
             return Integer.parseInt(getText(el, tag, String.valueOf(defaultVal)));
         } catch (NumberFormatException e) {
             return defaultVal;
+        }
+    }
+
+    private void loadReminders(Element taskEl, Task task) {
+        task.setReminders(loadReminderList(taskEl));
+    }
+
+    private java.util.ArrayList<Reminder> loadReminderList(Element parentEl) {
+        java.util.ArrayList<Reminder> reminders = new java.util.ArrayList<>();
+        NodeList wrappers = parentEl.getElementsByTagName("reminders");
+        if (wrappers.getLength() == 0) return reminders;
+
+        Element wrapper = (Element) wrappers.item(0);
+        NodeList reminderNodes = wrapper.getElementsByTagName("reminder");
+        for (int i = 0; i < reminderNodes.getLength() && reminders.size() < 10; i++) {
+            Element el = (Element) reminderNodes.item(i);
+            String typeText = getText(el, "type", "BEFORE_DEADLINE");
+            Reminder.Type type;
+            try {
+                type = Reminder.Type.valueOf(typeText);
+            } catch (IllegalArgumentException ex) {
+                type = Reminder.Type.BEFORE_DEADLINE;
+            }
+            String dateTime = getText(el, "dateTime", "");
+            int minutesBefore = parseInt(el, "minutesBefore", 10);
+            reminders.add(new Reminder(type, dateTime, minutesBefore));
+        }
+        return reminders;
+    }
+
+    private void appendReminders(Document doc, Element taskEl, Task task) {
+        appendReminders(doc, taskEl, task.getReminders());
+    }
+
+    private void appendReminders(Document doc, Element parentEl, java.util.List<Reminder> reminders) {
+        if (reminders == null || reminders.isEmpty()) return;
+
+        Element remindersEl = doc.createElement("reminders");
+        parentEl.appendChild(remindersEl);
+        for (Reminder reminder : reminders) {
+            Element el = doc.createElement("reminder");
+            remindersEl.appendChild(el);
+            appendText(doc, el, "type", reminder.getType().name());
+            appendText(doc, el, "dateTime", reminder.getDateTime());
+            appendText(doc, el, "minutesBefore", String.valueOf(reminder.getMinutesBefore()));
         }
     }
 

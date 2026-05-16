@@ -55,6 +55,7 @@ public class SchedulePanel extends JPanel {
     };
 
     private static final int ROW_HEIGHT = 64;
+    private static final double DIALOG_MAX_HEIGHT_RATIO = 0.78;
 
     private final List<Schedule> schedules;
     private final Runnable       saveCallback;
@@ -1487,7 +1488,7 @@ public class SchedulePanel extends JPanel {
                 slotsContainer.repaint();
                 dlg.pack();
                 int screenH = Toolkit.getDefaultToolkit().getScreenSize().height;
-                int maxH = (int)(screenH * 0.85);
+                int maxH = (int)(screenH * DIALOG_MAX_HEIGHT_RATIO);
                 if (!hasRemoveBtn) {
                     baseWidth[0] = dlg.getWidth();
                     dlg.setSize(baseWidth[0], Math.min(dlg.getPreferredSize().height, maxH));
@@ -1605,7 +1606,7 @@ public class SchedulePanel extends JPanel {
                 nameField.requestFocus();
                 dlg.pack();
                 dlg.setSize(dlg.getWidth(), Math.min(dlg.getPreferredSize().height,
-                    (int)(Toolkit.getDefaultToolkit().getScreenSize().height * 0.85)));
+                    (int)(Toolkit.getDefaultToolkit().getScreenSize().height * DIALOG_MAX_HEIGHT_RATIO)));
                 return;
             }
             if (slotRows.isEmpty()) {
@@ -1613,7 +1614,7 @@ public class SchedulePanel extends JPanel {
                 errorBanner.setVisible(true);
                 dlg.pack();
                 dlg.setSize(dlg.getWidth(), Math.min(dlg.getPreferredSize().height,
-                    (int)(Toolkit.getDefaultToolkit().getScreenSize().height * 0.85)));
+                    (int)(Toolkit.getDefaultToolkit().getScreenSize().height * DIALOG_MAX_HEIGHT_RATIO)));
                 return;
             }
 
@@ -1625,7 +1626,7 @@ public class SchedulePanel extends JPanel {
                     errorBanner.setVisible(true);
                     dlg.pack();
                     dlg.setSize(dlg.getWidth(), Math.min(dlg.getPreferredSize().height,
-                        (int)(Toolkit.getDefaultToolkit().getScreenSize().height * 0.85)));
+                        (int)(Toolkit.getDefaultToolkit().getScreenSize().height * DIALOG_MAX_HEIGHT_RATIO)));
                     return;
                 }
             }
@@ -1636,7 +1637,7 @@ public class SchedulePanel extends JPanel {
                 errorBanner.setVisible(true);
                 dlg.pack();
                 dlg.setSize(dlg.getWidth(), Math.min(dlg.getPreferredSize().height,
-                    (int)(Toolkit.getDefaultToolkit().getScreenSize().height * 0.85)));
+                    (int)(Toolkit.getDefaultToolkit().getScreenSize().height * DIALOG_MAX_HEIGHT_RATIO)));
                 return;
             }
 
@@ -1691,7 +1692,7 @@ public class SchedulePanel extends JPanel {
         root.add(buildDlgBtnRow(dlg, isEdit ? "儲存變更" : "新增課程", accentColor, onOk), BorderLayout.SOUTH);
         dlg.pack();
         int screenH = Toolkit.getDefaultToolkit().getScreenSize().height;
-        int maxH    = (int)(screenH * 0.85);
+        int maxH    = (int)(screenH * DIALOG_MAX_HEIGHT_RATIO);
         dlg.setSize(dlg.getWidth(), Math.min(dlg.getHeight(), maxH));
         AppUIManager.applyRoundedWindowShape(dlg, 16);
         dlg.setLocationRelativeTo(null);

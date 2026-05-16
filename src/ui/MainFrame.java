@@ -9,6 +9,7 @@ import model.Schedule;
 import model.Task;
 import model.TodoItem;
 import service.CategoryManager;
+import service.ReminderService;
 import service.SessionManager;
 import service.TronclassService;
 
@@ -34,8 +35,15 @@ public class MainFrame extends JFrame {
     private final TodoPanel       todoPanel;
     private final SchoolNewsPanel newsPanel;
     private final SchedulePanel   schedulePanel;
+    private NavItem calendarNav;
+    private NavItem todoNav;
+    private NavItem newsNav;
+    private NavItem scheduleNav;
 
+    private final Runnable saveTasksCallback;
     private final Runnable saveTodosCallback;
+    private final Runnable saveSchedulesCallback;
+    private Runnable closeRequestHandler;
 
     private CategoryManager categoryManager;
 
@@ -55,7 +63,9 @@ public class MainFrame extends JFrame {
                      Runnable saveTasksCallback, Runnable saveTodosCallback,
                      Runnable saveSchedulesCallback) {
 
+        this.saveTasksCallback = saveTasksCallback;
         this.saveTodosCallback = saveTodosCallback;
+        this.saveSchedulesCallback = saveSchedulesCallback;
 
         categoryManager.addRemoveListener(deletedCat -> {
             for (Task t : tasks) {
@@ -76,17 +86,18 @@ public class MainFrame extends JFrame {
         schedulePanel = new SchedulePanel(schedules, saveSchedulesCallback);
 
         setTitle("學生行程與任務管理系統");
-        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
         setSize(1200, 700);
         setMinimumSize(new Dimension(900, 560));
         setLocationRelativeTo(null);
 
         addWindowListener(new WindowAdapter() {
             @Override public void windowClosing(WindowEvent e) {
-                saveTasksCallback.run();
-                saveTodosCallback.run();
-                saveSchedulesCallback.run();
-                if (cookieValidationTimer != null) cookieValidationTimer.stop();
+                if (closeRequestHandler != null) {
+                    closeRequestHandler.run();
+                } else {
+                    exitApplication();
+                }
             }
         });
 
@@ -612,6 +623,11 @@ public class MainFrame extends JFrame {
         NavItem newsNav     = new NavItem("學校公告");
         NavItem scheduleNav = new NavItem("課程課表");
 
+        this.calendarNav = calNav;
+        this.todoNav = todoNav;
+        this.newsNav = newsNav;
+        this.scheduleNav = scheduleNav;
+
         calNav.addActionListener(e      -> switchTo("calendar", calNav));
         todoNav.addActionListener(e     -> switchTo("todo",     todoNav));
         newsNav.addActionListener(e     -> switchTo("news",     newsNav));
@@ -710,6 +726,51 @@ public class MainFrame extends JFrame {
             g2.dispose();
             super.paintComponent(g);
         }
+    }
+
+    public void setCloseRequestHandler(Runnable closeRequestHandler) {
+        this.closeRequestHandler = closeRequestHandler;
+    }
+
+    public void hideToTray() {
+        setVisible(false);
+    }
+
+    public void restoreFromTray() {
+        setVisible(true);
+        setState(Frame.NORMAL);
+        setExtendedState(Frame.NORMAL);
+        toFront();
+        requestFocusInWindow();
+        setAlwaysOnTop(true);
+        setAlwaysOnTop(false);
+    }
+
+    public void refreshReminderViews() {
+        todoPanel.refreshList();
+        calendarPanel.updateCalendar();
+    }
+
+    public void openReminderTarget(ReminderService.TargetType targetType, int targetId) {
+        restoreFromTray();
+        SwingUtilities.invokeLater(() -> {
+            if (targetType == ReminderService.TargetType.TODO) {
+                switchTo("todo", todoNav);
+                todoPanel.revealTodo(targetId);
+            } else if (targetType == ReminderService.TargetType.TASK) {
+                switchTo("calendar", calendarNav);
+                calendarPanel.revealTask(targetId);
+            }
+        });
+    }
+
+    public void exitApplication() {
+        saveTasksCallback.run();
+        saveTodosCallback.run();
+        saveSchedulesCallback.run();
+        if (cookieValidationTimer != null) cookieValidationTimer.stop();
+        dispose();
+        System.exit(0);
     }
 
     public void showWindow() { setVisible(true); }

@@ -5,7 +5,6 @@ import java.awt.event.*;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.time.format.DateTimeParseException;
 import java.util.*;
 import java.util.List;
 import javax.swing.*;
@@ -18,6 +17,10 @@ public class CalendarPanel extends JPanel {
     private static final String[] WEEK_DAY_NAMES = {"日","一","二","三","四","五","六"};
     private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("MM/dd");
     private static final DateTimeFormatter ISO_FMT  = DateTimeFormatter.ISO_LOCAL_DATE;
+    private static final double DIALOG_MAX_HEIGHT_RATIO = 0.68;
+    private static final int DIALOG_MIN_WIDTH = 460;
+    private static final int DIALOG_MAX_WIDTH = 480;
+    private static final int DIALOG_MIN_HEIGHT = 0;
 
     private final JPanel[]  dayPanels     = new JPanel[7];
     private final JLabel[]  dayLabels     = new JLabel[7];
@@ -30,9 +33,6 @@ public class CalendarPanel extends JPanel {
 
     // 目前選取的分類篩選
     private String currentFilter = CategoryManager.ALL;
-
-    private final javax.swing.Timer reminderTimer;
-    private final Set<Integer>      remindedIds = new HashSet<>();
 
     private TaskPopover currentPopover = null;
     private ComponentListener windowResizeListener = null;
@@ -71,9 +71,6 @@ public class CalendarPanel extends JPanel {
         // 分類清單變動（新增/刪除）時刷新
         categoryManager.addListener(this::updateCalendar);
 
-        reminderTimer = new javax.swing.Timer(60_000, e -> scanReminders());
-        reminderTimer.setInitialDelay(0);
-        reminderTimer.start();
     }
 
     @Override public void addNotify() {
@@ -238,6 +235,8 @@ public class CalendarPanel extends JPanel {
         card.setBorder(new EmptyBorder(4, 6, 4, 6));
         card.setMaximumSize(new Dimension(Integer.MAX_VALUE, Integer.MAX_VALUE));
         card.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        card.putClientProperty("taskId", task.getId());
+        card.putClientProperty("dayIdx", dayIdx);
 
         JLabel dot = new JLabel(task.isImportant() ? "!" : "-", SwingConstants.CENTER);
         dot.setFont(new Font("Dialog", Font.BOLD, 11));
@@ -283,6 +282,12 @@ public class CalendarPanel extends JPanel {
             timeLbl.setForeground(AppColors.TEXT_TERTIARY);
             timeLbl.setAlignmentX(Component.LEFT_ALIGNMENT);
             right.add(timeLbl);
+
+            LocalDateTime deadline = parseTaskDeadline(task);
+            if (deadline != null && ReminderChips.hasUpcoming(task.getReminders(), deadline)) {
+                right.add(Box.createRigidArea(new Dimension(0, 2)));
+                right.add(ReminderChips.build(task.getReminders(), deadline, 0));
+            }
         }
 
         // 分類標籤（若有）
@@ -352,7 +357,6 @@ public class CalendarPanel extends JPanel {
         currentPopover = new TaskPopover(task,
             () -> { closePopover(); openTaskDialog(task, null); },
             () -> {
-                remindedIds.remove(task.getId());
                 tasks.remove(task);
                 closePopover();
                 updateCalendar();
@@ -491,6 +495,16 @@ public class CalendarPanel extends JPanel {
                 JLabel timeLbl = rowLabel("[時間]  無截止日期");
                 timeLbl.setForeground(AppColors.TEXT_TERTIARY);
                 body.add(timeLbl);
+                body.add(Box.createRigidArea(new Dimension(0, 6)));
+            }
+
+            LocalDateTime popoverDeadline = parseTaskDeadline(task);
+            if (popoverDeadline != null && ReminderChips.hasUpcoming(task.getReminders(), popoverDeadline)) {
+                JLabel reminderHead = rowLabel("[提醒]");
+                reminderHead.setForeground(AppColors.TEXT_TERTIARY);
+                body.add(reminderHead);
+                body.add(Box.createRigidArea(new Dimension(0, 3)));
+                body.add(ReminderChips.build(task.getReminders(), popoverDeadline, 2));
                 body.add(Box.createRigidArea(new Dimension(0, 6)));
             }
 
@@ -696,7 +710,8 @@ public class CalendarPanel extends JPanel {
             catCombo.setSelectedItem(editTask.getCategory());
         }
 
-        int initH = 9, initM = 0;
+        LocalDateTime nowForDefault = nextFullHour();
+        int initH = nowForDefault.getHour(), initM = nowForDefault.getMinute();
         if (isEdit && !editTask.getTime().isEmpty()) {
             String[] tp = editTask.getTime().split(":");
             try { initH = Integer.parseInt(tp[0]); initM = Integer.parseInt(tp[1]); }
@@ -705,6 +720,8 @@ public class CalendarPanel extends JPanel {
 
         final LocalDate[] selectedDate = { initDate };
         final int[]       selectedTime = { initH, initM };
+        final Runnable[] resizeDialog = new Runnable[1];
+        final Runnable[] refreshReminderAvailability = new Runnable[1];
 
         DateTimeFormatter btnDateFmt = DateTimeFormatter.ofPattern("yyyy/MM/dd");
         JButton dateBtn = pickerBtn(initDate.format(btnDateFmt));
@@ -714,12 +731,14 @@ public class CalendarPanel extends JPanel {
             AppUIManager.showDatePicker(dateBtn, selectedDate[0], date -> {
                 selectedDate[0] = date;
                 dateBtn.setText(date.format(btnDateFmt));
+                if (refreshReminderAvailability[0] != null) refreshReminderAvailability[0].run();
             })
         );
         timeBtn.addActionListener(e ->
             AppUIManager.showTimePicker(timeBtn, selectedTime[0], selectedTime[1], (h, m) -> {
                 selectedTime[0] = h; selectedTime[1] = m;
                 timeBtn.setText(String.format("%02d:%02d", h, m));
+                if (refreshReminderAvailability[0] != null) refreshReminderAvailability[0].run();
             })
         );
 
@@ -742,6 +761,15 @@ public class CalendarPanel extends JPanel {
         importantCheck.setFont(AppFonts.BODY_SMALL);
         importantCheck.setForeground(AppColors.DANGER);
         importantCheck.setOpaque(false);
+
+        ReminderEditorPanel reminderPanel = new ReminderEditorPanel(dlg,
+                isEdit ? editTask.getReminders() : java.util.Collections.emptyList(),
+                LocalDateTime.of(initDate, java.time.LocalTime.of(initH, initM)),
+                () -> {
+                    if (resizeDialog[0] != null) resizeDialog[0].run();
+                });
+        reminderPanel.setVisible(LocalDateTime.of(initDate, java.time.LocalTime.of(initH, initM))
+                .isAfter(LocalDateTime.now()));
 
         JPanel content = new JPanel(new GridBagLayout());
         content.setOpaque(false);
@@ -768,8 +796,27 @@ public class CalendarPanel extends JPanel {
         content.add(dlgFieldLabel("截止日期與時間"), gc);
         gc.gridy = 7; gc.insets = new Insets(0, 0, 12, 0);
         content.add(dtPanel, gc);
-        gc.gridy = 8; gc.insets = new Insets(0, 0, 0, 0);
+        gc.gridy = 8; gc.insets = new Insets(0, 0, 8, 0);
         content.add(importantCheck, gc);
+        gc.gridy = 9; gc.insets = new Insets(0, 0, 4, 0);
+        content.add(dlgFieldLabel("提醒"), gc);
+        gc.gridy = 10; gc.insets = new Insets(0, 0, 0, 0);
+        content.add(reminderPanel, gc);
+        content.getComponent(9).setVisible(reminderPanel.isVisible());
+        gc.gridy = 11; gc.weighty = 1.0; gc.fill = GridBagConstraints.BOTH;
+        gc.insets = new Insets(0, 0, 0, 0);
+        content.add(Box.createVerticalGlue(), gc);
+
+        refreshReminderAvailability[0] = () -> {
+            LocalDateTime selectedDeadline = LocalDateTime.of(selectedDate[0],
+                    java.time.LocalTime.of(selectedTime[0], selectedTime[1]));
+            boolean canRemind = selectedDeadline.isAfter(LocalDateTime.now());
+            reminderPanel.setVisible(canRemind);
+            content.getComponent(9).setVisible(canRemind);
+            content.revalidate();
+            content.repaint();
+            if (resizeDialog[0] != null) resizeDialog[0].run();
+        };
 
         JPanel btnRow = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 10));
         btnRow.setBackground(new Color(0xFAF9F7));
@@ -797,12 +844,30 @@ public class CalendarPanel extends JPanel {
         btnRow.add(cancelBtn);
         btnRow.add(okBtn);
 
+        JScrollPane contentScroll = new JScrollPane(content,
+                JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED,
+                JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+        contentScroll.setBorder(null);
+        contentScroll.setOpaque(false);
+        contentScroll.getViewport().setOpaque(false);
+        contentScroll.getVerticalScrollBar().setUnitIncrement(16);
+        AppUIManager.applySlimScrollBar(contentScroll);
+
         root.add(header,  BorderLayout.NORTH);
-        root.add(content, BorderLayout.CENTER);
+        root.add(contentScroll, BorderLayout.CENTER);
         root.add(btnRow,  BorderLayout.SOUTH);
 
         dlg.pack();
-        dlg.setSize(400, dlg.getPreferredSize().height);
+        resizeDialog[0] = () -> {
+            dlg.pack();
+            int maxH = (int)(GraphicsEnvironment
+                    .getLocalGraphicsEnvironment()
+                    .getMaximumWindowBounds().height * DIALOG_MAX_HEIGHT_RATIO);
+            int width = Math.min(Math.max(DIALOG_MIN_WIDTH, dlg.getPreferredSize().width), DIALOG_MAX_WIDTH);
+            int height = Math.min(Math.max(DIALOG_MIN_HEIGHT, dlg.getPreferredSize().height), maxH);
+            dlg.setSize(width, height);
+        };
+        resizeDialog[0].run();
         AppUIManager.applyRoundedWindowShape(dlg, 16);
         dlg.setLocationRelativeTo(this);
 
@@ -821,6 +886,11 @@ public class CalendarPanel extends JPanel {
             LocalDate chosenDate = selectedDate[0];
             String dateVal = chosenDate.format(DateTimeFormatter.ISO_LOCAL_DATE);
             String timeVal = String.format("%02d:%02d", selectedTime[0], selectedTime[1]);
+            boolean canSaveReminders = LocalDateTime.of(chosenDate,
+                    java.time.LocalTime.of(selectedTime[0], selectedTime[1]))
+                    .isAfter(LocalDateTime.now());
+            LocalDateTime deadlineValue = LocalDateTime.of(chosenDate,
+                    java.time.LocalTime.of(selectedTime[0], selectedTime[1]));
 
             // 取得分類
             String selectedCat = (String) catCombo.getSelectedItem();
@@ -834,7 +904,8 @@ public class CalendarPanel extends JPanel {
                 editTask.setTime(timeVal);
                 editTask.setImportant(importantCheck.isSelected());
                 editTask.setCategory(selectedCat);
-                remindedIds.remove(editTask.getId());
+                editTask.setReminders(canSaveReminders
+                        ? reminderPanel.getReminders(deadlineValue) : java.util.Collections.emptyList());
             } else {
                 int nextId = tasks.isEmpty() ? 1
                         : tasks.stream().mapToInt(Task::getId).max().orElse(0) + 1;
@@ -842,6 +913,8 @@ public class CalendarPanel extends JPanel {
                                   dateVal, timeVal, true);
                 t.setImportant(importantCheck.isSelected());
                 t.setCategory(selectedCat);
+                t.setReminders(canSaveReminders
+                        ? reminderPanel.getReminders(deadlineValue) : java.util.Collections.emptyList());
                 tasks.add(t);
             }
             dlg.dispose();
@@ -852,9 +925,27 @@ public class CalendarPanel extends JPanel {
         dlg.setVisible(true);
     }
 
+    private static void liftDialogIntoView(JDialog dlg) {
+        Rectangle bounds = GraphicsEnvironment
+                .getLocalGraphicsEnvironment()
+                .getMaximumWindowBounds();
+        int topPadding = 8;
+        int bottomPadding = 16;
+        int y = bounds.y + topPadding;
+        if (y + dlg.getHeight() > bounds.y + bounds.height - bottomPadding) {
+            y = bounds.y + bounds.height - bottomPadding - dlg.getHeight();
+        }
+        dlg.setLocation(dlg.getX(), Math.max(bounds.y + topPadding, y));
+    }
+
+    private static LocalDateTime nextFullHour() {
+        LocalDateTime now = LocalDateTime.now();
+        return now.withMinute(0).withSecond(0).withNano(0).plusHours(1);
+    }
+
     private static JLabel dlgFieldLabel(String text) {
         JLabel l = new JLabel(text);
-        l.setFont(AppFonts.LABEL);
+        l.setFont(AppFonts.BODY_SMALL);
         l.setForeground(AppColors.TEXT_SECONDARY);
         l.setAlignmentX(Component.LEFT_ALIGNMENT);
         return l;
@@ -883,6 +974,9 @@ public class CalendarPanel extends JPanel {
 
     // ── 更新顯示（套用篩選） ──────────────────────────────────────────────────
     public void updateCalendar() {
+        if (clearOverdueReminders()) {
+            saveCallback.run();
+        }
         LocalDate today   = LocalDate.now();
         LocalDate weekEnd = weekStart.plusDays(6);
         weekLabel.setText(weekStart.format(DATE_FMT) + " - " + weekEnd.format(DATE_FMT));
@@ -940,34 +1034,73 @@ public class CalendarPanel extends JPanel {
         }
     }
 
+    public void revealTask(int taskId) {
+        currentFilter = CategoryManager.ALL;
+        Task target = tasks.stream()
+                .filter(task -> task.getId() == taskId)
+                .findFirst()
+                .orElse(null);
+        if (target == null) return;
+
+        if (target.hasDeadline() && !target.getDate().isEmpty()) {
+            try {
+                LocalDate date = LocalDate.parse(target.getDate());
+                weekStart = date.minusDays(date.getDayOfWeek().getValue() % 7);
+            } catch (Exception ignored) {
+            }
+        }
+        updateCalendar();
+
+        SwingUtilities.invokeLater(() -> {
+            for (int dayIdx = 0; dayIdx < taskContainers.length; dayIdx++) {
+                for (Component component : taskContainers[dayIdx].getComponents()) {
+                    if (component instanceof JPanel
+                            && Integer.valueOf(taskId).equals(
+                                    ((JComponent) component).getClientProperty("taskId"))) {
+                        ((JComponent) component).scrollRectToVisible(component.getBounds());
+                        showPopover(target, (JPanel) component, dayIdx);
+                        return;
+                    }
+                }
+            }
+        });
+    }
+
     /** 判斷任務是否符合目前篩選條件 */
     private boolean matchFilter(Task t) {
         if (CategoryManager.ALL.equals(currentFilter)) return true;
         return currentFilter.equals(t.getCategory());
     }
 
+    private boolean clearOverdueReminders() {
+        boolean changed = false;
+        LocalDateTime now = LocalDateTime.now();
+        for (Task task : tasks) {
+            if (task.getReminders().isEmpty()) continue;
+            LocalDateTime deadline = parseTaskDeadline(task);
+            if (deadline != null && !deadline.isAfter(now)) {
+                task.setReminders(java.util.Collections.emptyList());
+                changed = true;
+            }
+        }
+        return changed;
+    }
+
+    private static LocalDateTime parseTaskDeadline(Task task) {
+        if (task == null || !task.hasDeadline() || task.getDate().isEmpty()
+                || task.getTime().isEmpty()) {
+            return null;
+        }
+        try {
+            return LocalDateTime.parse(task.getDate() + " " + task.getTime(),
+                    DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"));
+        } catch (Exception ex) {
+            return null;
+        }
+    }
+
     private static String toHex(Color c) {
         return String.format("#%02X%02X%02X", c.getRed(), c.getGreen(), c.getBlue());
     }
-
-    // ── Reminder ──────────────────────────────────────────────────────────────
-    private void scanReminders() {
-        for (Task t : tasks) maybeRemind(t);
-    }
-
-    private void maybeRemind(Task task) {
-        if (!task.isImportant() || !task.hasDeadline()) return;
-        try {
-            LocalDateTime target = LocalDateTime.parse(
-                    task.getDate() + " " + task.getTime(),
-                    DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"));
-            long diff = java.time.Duration.between(LocalDateTime.now(), target).toMinutes();
-            if (diff >= 0 && diff <= 240 && !remindedIds.contains(task.getId())) {
-                remindedIds.add(task.getId());
-                JOptionPane.showMessageDialog(this,
-                        "提醒：重要任務「" + task.getTitle() + "」將在四小時內到期。",
-                        "任務提醒", JOptionPane.INFORMATION_MESSAGE);
-            }
-        } catch (DateTimeParseException ignored) {}
-    }
 }
+

@@ -147,6 +147,8 @@ public class AppUIManager {
         // 若超出螢幕右邊就往左對齊
         Dimension screen = Toolkit.getDefaultToolkit().getScreenSize();
         if (x + popup.getWidth() > screen.width) x = screen.width - popup.getWidth() - 4;
+        if (y + popup.getHeight() > screen.height) y = loc.y - popup.getHeight() - 4;
+        if (y < 0) y = 4;
         popup.setLocation(x, y);
         popup.setVisible(true);
 
@@ -333,6 +335,8 @@ public class AppUIManager {
         int y = loc.y + anchor.getHeight() + 4;
         Dimension screen = Toolkit.getDefaultToolkit().getScreenSize();
         if (x + popup.getWidth() > screen.width) x = screen.width - popup.getWidth() - 4;
+        if (y + popup.getHeight() > screen.height) y = loc.y - popup.getHeight() - 4;
+        if (y < 0) y = 4;
         popup.setLocation(x, y);
         popup.setVisible(true);
 
@@ -349,6 +353,8 @@ public class AppUIManager {
         private int selectedHour;
         private int selectedMinute;
         private Mode mode = Mode.HOUR;
+        private boolean gestureStartedInMinute = false;
+        private boolean gestureDragged = false;
 
         private final TimePickerCallback callback;
         private final ClockFace clockFace;
@@ -373,11 +379,10 @@ public class AppUIManager {
                 new LineBorder(AppColors.BORDER_DEFAULT, 1, true),
                 new EmptyBorder(14, 16, 12, 16)
             ));
-            setPreferredSize(new Dimension(256, 330));
+            setPreferredSize(new Dimension(256, 292));
 
             add(buildTopArea(), BorderLayout.NORTH);
             add(clockFace,      BorderLayout.CENTER);
-            add(buildBottom(),  BorderLayout.SOUTH);
 
             refreshDisplay();
         }
@@ -497,28 +502,8 @@ public class AppUIManager {
             refreshAmPm();
         }
 
-        private JPanel buildBottom() {
-            JPanel bottom = new JPanel(new FlowLayout(FlowLayout.RIGHT, 4, 0));
-            bottom.setBackground(Color.WHITE);
-            JButton cancelBtn = timeBtn("取消", false);
-            JButton okBtn     = timeBtn("確認", true);
-            cancelBtn.addActionListener(e -> SwingUtilities.getWindowAncestor(this).dispose());
-            okBtn.addActionListener(e -> callback.onTimeSelected(selectedHour, selectedMinute));
-            bottom.add(cancelBtn);
-            bottom.add(okBtn);
-            return bottom;
-        }
-
-        private JButton timeBtn(String text, boolean primary) {
-            JButton b = new JButton(text);
-            b.setFont(AppFonts.BODY_SMALL);
-            b.setBackground(primary ? AppColors.ACCENT : AppColors.BG_TERTIARY);
-            b.setForeground(primary ? Color.WHITE : AppColors.TEXT_SECONDARY);
-            b.setBorder(new EmptyBorder(5, 14, 5, 14));
-            b.setFocusPainted(false);
-            b.setOpaque(true);
-            b.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-            return b;
+        private void confirmSelectedTime() {
+            callback.onTimeSelected(selectedHour, selectedMinute);
         }
 
         /** 圓形時鐘面 */
@@ -529,12 +514,25 @@ public class AppUIManager {
                 setPreferredSize(new Dimension(200, 200));
 
                 addMouseListener(new MouseAdapter() {
-                    @Override public void mouseClicked(MouseEvent e) {
+                    @Override public void mousePressed(MouseEvent e) {
+                        gestureStartedInMinute = (mode == Mode.MINUTE);
+                        gestureDragged = false;
                         handleClick(e.getX(), e.getY());
+                    }
+
+                    @Override public void mouseReleased(MouseEvent e) {
+                        if (!gestureStartedInMinute && !gestureDragged) {
+                            return;
+                        }
+                        handleClick(e.getX(), e.getY());
+                        if (mode == Mode.MINUTE) {
+                            confirmSelectedTime();
+                        }
                     }
                 });
                 addMouseMotionListener(new MouseMotionAdapter() {
                     @Override public void mouseDragged(MouseEvent e) {
+                        gestureDragged = true;
                         handleClick(e.getX(), e.getY());
                     }
                 });

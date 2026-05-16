@@ -1,77 +1,84 @@
 package model;
 
-/**
- * Task 表示一筆行事曆任務。
- * 新增：title（標題）、description（詳細內容）、completed（完成狀態）、category（分類）
- * deadline 即原本的 date+time，可選（hasDeadline 為 false 時不顯示）
- */
+import java.util.ArrayList;
+import java.util.List;
+
 public class Task {
-    private int     id;
-    private String  title;
-    private String  description; // 詳細說明，可為空字串
-    private String  date;        // 格式 YYYY-MM-DD，hasDeadline=false 時為空字串
-    private String  time;        // 格式 HH:mm，hasDeadline=false 時為空字串
+    private int id;
+    private String title;
+    private String description;
+    private String date;
+    private String time;
     private boolean hasDeadline;
     private boolean important;
     private boolean completed;
-    private String  category;    // 分類名稱，空字串表示未分類
+    private String category;
+    private final List<Reminder> reminders = new ArrayList<>();
 
     public Task() {}
 
     public Task(int id, String title, String description,
                 String date, String time, boolean hasDeadline) {
-        this.id          = id;
-        this.title       = title;
+        this.id = id;
+        this.title = title;
         this.description = description;
-        this.date        = date;
-        this.time        = time;
+        this.date = date;
+        this.time = time;
         this.hasDeadline = hasDeadline;
-        this.important   = false;
-        this.completed   = false;
-        this.category    = "";
+        this.important = false;
+        this.completed = false;
+        this.category = "";
     }
 
-    // 向下相容舊建構子（date+time 固定存在）
     public Task(int id, String date, String time, String content) {
-        this.id          = id;
-        this.title       = content;
+        this.id = id;
+        this.title = content;
         this.description = "";
-        this.date        = date;
-        this.time        = time;
+        this.date = date;
+        this.time = time;
         this.hasDeadline = true;
-        this.important   = false;
-        this.completed   = false;
-        this.category    = "";
+        this.important = false;
+        this.completed = false;
+        this.category = "";
     }
 
-    public int     getId()          { return id; }
-    public void    setId(int id)    { this.id = id; }
+    public int getId() { return id; }
+    public void setId(int id) { this.id = id; }
 
-    public String  getTitle()                { return title != null ? title : ""; }
-    public void    setTitle(String title)    { this.title = title; }
+    public String getTitle() { return title != null ? title : ""; }
+    public void setTitle(String title) { this.title = title; }
 
-    // getContent / setContent 為 legacy alias（XML 讀寫與 CalendarPanel 仍用此名）
-    public String  getContent()              { return getTitle(); }
-    public void    setContent(String c)      { setTitle(c); }
+    public String getContent() { return getTitle(); }
+    public void setContent(String c) { setTitle(c); }
 
-    public String  getDescription()                    { return description != null ? description : ""; }
-    public void    setDescription(String description)  { this.description = description; }
+    public String getDescription() { return description != null ? description : ""; }
+    public void setDescription(String description) { this.description = description; }
 
-    public String  getDate()                { return date != null ? date : ""; }
-    public void    setDate(String date)     { this.date = date; }
+    public String getDate() { return date != null ? date : ""; }
+    public void setDate(String date) { this.date = date; }
 
-    public String  getTime()                { return time != null ? time : ""; }
-    public void    setTime(String time)     { this.time = time; }
+    public String getTime() { return time != null ? time : ""; }
+    public void setTime(String time) { this.time = time; }
 
-    public boolean hasDeadline()                       { return hasDeadline; }
-    public void    setHasDeadline(boolean hasDeadline) { this.hasDeadline = hasDeadline; }
+    public boolean hasDeadline() { return hasDeadline; }
+    public void setHasDeadline(boolean hasDeadline) { this.hasDeadline = hasDeadline; }
 
-    public boolean isImportant()                    { return important; }
-    public void    setImportant(boolean important)  { this.important = important; }
+    public boolean isImportant() { return important; }
+    public void setImportant(boolean important) { this.important = important; }
 
-    public boolean isCompleted()                    { return completed; }
-    public void    setCompleted(boolean completed)  { this.completed = completed; }
+    public boolean isCompleted() { return completed; }
+    public void setCompleted(boolean completed) { this.completed = completed; }
 
-    public String  getCategory()                    { return category != null ? category : ""; }
-    public void    setCategory(String category)     { this.category = category != null ? category : ""; }
+    public String getCategory() { return category != null ? category : ""; }
+    public void setCategory(String category) { this.category = category != null ? category : ""; }
+
+    public List<Reminder> getReminders() { return reminders; }
+    public void setReminders(List<Reminder> reminders) {
+        this.reminders.clear();
+        if (reminders == null) return;
+        for (Reminder reminder : reminders) {
+            if (reminder == null || this.reminders.size() >= 10) break;
+            this.reminders.add(reminder);
+        }
+    }
 }

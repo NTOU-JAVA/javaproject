@@ -1,53 +1,71 @@
 package model;
 
-/**
- * TodoItem 表示一筆代辦事項。
- * 新增：title（標題）、description（詳細說明）、category（分類）
- * reminderTime 改為可選的 deadline（語意更清楚）
- */
+import java.util.ArrayList;
+import java.util.List;
+
 public class TodoItem {
-    private int     id;
-    private String  title;
-    private String  description;  // 詳細說明，可為空字串
-    private String  reminderTime; // 格式 YYYY-MM-DD HH:mm，可為 null（無 deadline）
+    private int id;
+    private String title;
+    private String description;
+    private String reminderTime;
+    private String deadlineTime;
     private boolean completed;
-    private String  category;     // 分類名稱，空字串表示未分類
+    private String category;
+    private final List<Reminder> reminders = new ArrayList<>();
 
     public TodoItem() {}
 
     public TodoItem(int id, String title, String description, String reminderTime) {
-        this.id          = id;
-        this.title       = title;
+        this.id = id;
+        this.title = title;
         this.description = description;
         this.reminderTime = reminderTime;
-        this.completed   = false;
-        this.category    = "";
+        this.deadlineTime = reminderTime;
+        this.completed = false;
+        this.category = "";
     }
 
-    // 向下相容舊建構子
     public TodoItem(int id, String content, String reminderTime) {
         this(id, content, "", reminderTime);
     }
 
-    public int     getId()          { return id; }
-    public void    setId(int id)    { this.id = id; }
+    public int getId() { return id; }
+    public void setId(int id) { this.id = id; }
 
-    public String  getTitle()               { return title != null ? title : ""; }
-    public void    setTitle(String title)   { this.title = title; }
+    public String getTitle() { return title != null ? title : ""; }
+    public void setTitle(String title) { this.title = title; }
 
-    // getContent / setContent 為 legacy alias
-    public String  getContent()             { return getTitle(); }
-    public void    setContent(String c)     { setTitle(c); }
+    public String getContent() { return getTitle(); }
+    public void setContent(String c) { setTitle(c); }
 
-    public String  getDescription()                   { return description != null ? description : ""; }
-    public void    setDescription(String description) { this.description = description; }
+    public String getDescription() { return description != null ? description : ""; }
+    public void setDescription(String description) { this.description = description; }
 
-    public String  getReminderTime()                       { return reminderTime; }
-    public void    setReminderTime(String reminderTime)    { this.reminderTime = reminderTime; }
+    public String getReminderTime() { return reminderTime; }
+    public void setReminderTime(String reminderTime) { this.reminderTime = reminderTime; }
 
-    public boolean isCompleted()                    { return completed; }
-    public void    setCompleted(boolean completed)  { this.completed = completed; }
+    public String getDeadlineTime() {
+        return deadlineTime != null ? deadlineTime : reminderTime;
+    }
 
-    public String  getCategory()                    { return category != null ? category : ""; }
-    public void    setCategory(String category)     { this.category = category != null ? category : ""; }
+    public void setDeadlineTime(String deadlineTime) {
+        this.deadlineTime = deadlineTime;
+        this.reminderTime = deadlineTime;
+    }
+
+    public boolean isCompleted() { return completed; }
+    public void setCompleted(boolean completed) { this.completed = completed; }
+
+    public String getCategory() { return category != null ? category : ""; }
+    public void setCategory(String category) { this.category = category != null ? category : ""; }
+
+    public List<Reminder> getReminders() { return reminders; }
+    public void setReminders(List<Reminder> reminders) {
+        this.reminders.clear();
+        if (reminders == null) return;
+        for (Reminder reminder : reminders) {
+            if (reminder == null || this.reminders.size() >= 10) break;
+            this.reminders.add(reminder);
+        }
+    }
 }

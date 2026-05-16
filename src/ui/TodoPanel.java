@@ -7,6 +7,7 @@ import java.time.format.DateTimeParseException;
 import java.util.List;
 import javax.swing.*;
 import javax.swing.border.*;
+import model.Reminder;
 import model.TodoItem;
 import service.CategoryManager;
 
@@ -18,12 +19,14 @@ public class TodoPanel extends JPanel {
 
     private static final DateTimeFormatter REMINDER_FMT =
             DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
+    private static final double DIALOG_MAX_HEIGHT_RATIO = 0.68;
+    private static final int DIALOG_MIN_WIDTH = 460;
+    private static final int DIALOG_MAX_WIDTH = 480;
+    private static final int DIALOG_MIN_HEIGHT = 0;
 
     private final List<TodoItem>         todos;
     private final Runnable               saveCallback;
     private final CategoryManager        categoryManager;
-    private final java.util.Set<Integer> remindedIds = new java.util.HashSet<>();
-    private final Timer                  reminderTimer;
 
     // 清單容器（BoxLayout 垂直排列）
     private final JPanel listContainer = new JPanel();
@@ -48,10 +51,6 @@ public class TodoPanel extends JPanel {
         add(topArea,         BorderLayout.NORTH);
         add(buildListArea(), BorderLayout.CENTER);
         add(buildHintBar(),  BorderLayout.SOUTH);
-
-        reminderTimer = new Timer(60_000, e -> scanReminders());
-        reminderTimer.setInitialDelay(0);
-        reminderTimer.start();
 
         // 分類刪除時，清空所有有此分類的代辦事項的分類欄位
         categoryManager.addRemoveListener(deletedCat -> {
@@ -172,6 +171,7 @@ public class TodoPanel extends JPanel {
         row.setBackground(rowIndex % 2 == 0 ? AppColors.BG_PRIMARY : new Color(0xFBFBF9));
         row.setMinimumSize(new Dimension(0, 52));
         row.setAlignmentX(Component.LEFT_ALIGNMENT);
+        row.putClientProperty("todoId", item.getId());
 
         // 左側：可點擊的圓圈
         JLabel circle = new JLabel(item.isCompleted() ? "✔" : "○", SwingConstants.CENTER);
@@ -223,7 +223,7 @@ public class TodoPanel extends JPanel {
             @Override public void mouseReleased(MouseEvent e) { row.dispatchEvent(SwingUtilities.convertMouseEvent(titleLbl, e, row)); }
         });
 
-        String rt   = item.getReminderTime();
+        String rt   = item.getDeadlineTime();
         String desc = item.getDescription();
         center.add(titleLbl);
 
@@ -239,17 +239,29 @@ public class TodoPanel extends JPanel {
             }
             if (rt != null) {
                 Color timeColor = AppColors.TEXT_TERTIARY;
+                String timePrefix = "[期限] ";
                 try {
                     LocalDateTime target = LocalDateTime.parse(rt, REMINDER_FMT);
                     long mins = java.time.Duration.between(LocalDateTime.now(), target).toMinutes();
-                    if (mins >= 0 && mins <= 1440) timeColor = AppColors.DANGER;
+                    if (mins < 0) {
+                        timeColor = AppColors.DANGER;
+                        timePrefix = "[逾期] ";
+                    } else if (mins <= 1440) {
+                        timeColor = AppColors.DANGER;
+                    }
                 } catch (Exception ignored) {}
-                JLabel timeLbl = new JLabel("[期限] " + rt.substring(5));
+                JLabel timeLbl = new JLabel(timePrefix + rt.substring(5));
                 timeLbl.setFont(AppFonts.CAPTION);
                 timeLbl.setForeground(timeColor);
                 timeLbl.setAlignmentX(Component.LEFT_ALIGNMENT);
                 center.add(Box.createRigidArea(new Dimension(0, 1)));
                 center.add(timeLbl);
+
+                LocalDateTime deadline = parseDeadline(rt);
+                if (deadline != null && ReminderChips.hasUpcoming(item.getReminders(), deadline)) {
+                    center.add(Box.createRigidArea(new Dimension(0, 3)));
+                    center.add(ReminderChips.build(item.getReminders(), deadline, 2));
+                }
             }
             // 分類標籤（若有）
             if (!item.getCategory().isEmpty()) {
@@ -285,7 +297,6 @@ public class TodoPanel extends JPanel {
         delBtn.addActionListener(e -> actionsCard.show(actions, "confirm"));
         cancelDelBtn.addActionListener(e -> actionsCard.show(actions, "normal"));
         confirmDelBtn.addActionListener(e -> {
-            remindedIds.remove(item.getId());
             todos.remove(item);
             refreshList();
             saveCallback.run();
@@ -435,12 +446,13 @@ public class TodoPanel extends JPanel {
         }
 
         // ── 截止時間 ──
-        LocalDateTime base = LocalDateTime.now();
-        if (isEdit && editItem.getReminderTime() != null) {
-            try { base = LocalDateTime.parse(editItem.getReminderTime(), REMINDER_FMT); }
+        LocalDateTime base = nextFullHour();
+        if (isEdit && editItem.getDeadlineTime() != null) {
+            try { base = LocalDateTime.parse(editItem.getDeadlineTime(), REMINDER_FMT); }
             catch (DateTimeParseException ignored) {}
         }
-        boolean initHasDeadline = isEdit && editItem.getReminderTime() != null;
+        boolean initHasDeadline = isEdit && editItem.getDeadlineTime() != null;
+        boolean initCanRemind = initHasDeadline && base.isAfter(LocalDateTime.now());
 
         JCheckBox deadlineCheck = new JCheckBox("設定截止提醒時間", initHasDeadline);
         deadlineCheck.setFont(AppFonts.BODY_SMALL);
@@ -453,6 +465,8 @@ public class TodoPanel extends JPanel {
         java.time.format.DateTimeFormatter btnDateFmt =
                 java.time.format.DateTimeFormatter.ofPattern("yyyy/MM/dd");
 
+        final Runnable[] resizeDialog = new Runnable[1];
+        final Runnable[] refreshReminderAvailability = new Runnable[1];
         JButton dateBtn     = pickerBtn(selDate[0].format(btnDateFmt));
         JButton timePickBtn = pickerBtn(String.format("%02d:%02d", selTime[0], selTime[1]));
 
@@ -460,12 +474,14 @@ public class TodoPanel extends JPanel {
             AppUIManager.showDatePicker(dateBtn, selDate[0], date -> {
                 selDate[0] = date;
                 dateBtn.setText(date.format(btnDateFmt));
+                if (refreshReminderAvailability[0] != null) refreshReminderAvailability[0].run();
             })
         );
         timePickBtn.addActionListener(e ->
             AppUIManager.showTimePicker(timePickBtn, selTime[0], selTime[1], (h, m) -> {
                 selTime[0] = h; selTime[1] = m;
                 timePickBtn.setText(String.format("%02d:%02d", h, m));
+                if (refreshReminderAvailability[0] != null) refreshReminderAvailability[0].run();
             })
         );
 
@@ -485,6 +501,14 @@ public class TodoPanel extends JPanel {
         dtPanel.add(timeRow);
         dtPanel.setVisible(initHasDeadline);
 
+        ReminderEditorPanel reminderPanel = new ReminderEditorPanel(dlg,
+                isEdit ? editItem.getReminders() : java.util.Collections.emptyList(),
+                base,
+                () -> {
+                    if (resizeDialog[0] != null) resizeDialog[0].run();
+                });
+        reminderPanel.setVisible(initCanRemind);
+
         JPanel content = new JPanel(new GridBagLayout());
         content.setOpaque(false);
         content.setBorder(new EmptyBorder(14, 16, 10, 16));
@@ -502,7 +526,25 @@ public class TodoPanel extends JPanel {
         gc.gridy = 5; gc.insets = new Insets(0, 0, 12, 0); content.add(catCombo, gc);
         gc.gridy = 6; gc.insets = new Insets(0, 0, initHasDeadline ? 6 : 0, 0);
         content.add(deadlineCheck, gc);
-        gc.gridy = 7; gc.insets = new Insets(0, 0, 0, 0);  content.add(dtPanel, gc);
+        gc.gridy = 7; gc.insets = new Insets(0, 0, initHasDeadline ? 10 : 0, 0);  content.add(dtPanel, gc);
+        gc.gridy = 8; gc.insets = new Insets(0, 0, 4, 0);  content.add(fieldLabel("提醒"), gc);
+        gc.gridy = 9; gc.insets = new Insets(0, 0, 0, 0);  content.add(reminderPanel, gc);
+        content.getComponent(8).setVisible(initCanRemind);
+        gc.gridy = 10; gc.weighty = 1.0; gc.fill = GridBagConstraints.BOTH;
+        gc.insets = new Insets(0, 0, 0, 0);
+        content.add(Box.createVerticalGlue(), gc);
+
+        refreshReminderAvailability[0] = () -> {
+            boolean hasDeadline = deadlineCheck.isSelected();
+            LocalDateTime selectedDeadline = LocalDateTime.of(selDate[0],
+                    java.time.LocalTime.of(selTime[0], selTime[1]));
+            boolean canRemind = hasDeadline && selectedDeadline.isAfter(LocalDateTime.now());
+            reminderPanel.setVisible(canRemind);
+            content.getComponent(8).setVisible(canRemind);
+            content.revalidate();
+            content.repaint();
+            if (resizeDialog[0] != null) resizeDialog[0].run();
+        };
 
         deadlineCheck.addActionListener(e -> {
             boolean on = deadlineCheck.isSelected();
@@ -513,10 +555,7 @@ public class TodoPanel extends JPanel {
             updGc.anchor = GridBagConstraints.WEST;
             updGc.insets = new Insets(0, 0, on ? 6 : 0, 0);
             ((GridBagLayout) content.getLayout()).setConstraints(deadlineCheck, updGc);
-            content.revalidate();
-            content.repaint();
-            dlg.pack();
-            dlg.setSize(400, dlg.getPreferredSize().height);
+            refreshReminderAvailability[0].run();
         });
 
         JPanel btnRow = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 10));
@@ -545,12 +584,30 @@ public class TodoPanel extends JPanel {
         btnRow.add(cancelBtn);
         btnRow.add(okBtn);
 
+        JScrollPane contentScroll = new JScrollPane(content,
+                JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED,
+                JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+        contentScroll.setBorder(null);
+        contentScroll.setOpaque(false);
+        contentScroll.getViewport().setOpaque(false);
+        contentScroll.getVerticalScrollBar().setUnitIncrement(16);
+        AppUIManager.applySlimScrollBar(contentScroll);
+
         root.add(header,  BorderLayout.NORTH);
-        root.add(content, BorderLayout.CENTER);
+        root.add(contentScroll, BorderLayout.CENTER);
         root.add(btnRow,  BorderLayout.SOUTH);
 
         dlg.pack();
-        dlg.setSize(400, dlg.getPreferredSize().height);
+        resizeDialog[0] = () -> {
+            dlg.pack();
+            int maxH = (int)(GraphicsEnvironment
+                    .getLocalGraphicsEnvironment()
+                    .getMaximumWindowBounds().height * DIALOG_MAX_HEIGHT_RATIO);
+            int width = Math.min(Math.max(DIALOG_MIN_WIDTH, dlg.getPreferredSize().width), DIALOG_MAX_WIDTH);
+            int height = Math.min(Math.max(DIALOG_MIN_HEIGHT, dlg.getPreferredSize().height), maxH);
+            dlg.setSize(width, height);
+        };
+        resizeDialog[0].run();
         AppUIManager.applyRoundedWindowShape(dlg, 16);
         dlg.setLocationRelativeTo(this);
 
@@ -572,6 +629,12 @@ public class TodoPanel extends JPanel {
                     selDate[0].getYear(), selDate[0].getMonthValue(), selDate[0].getDayOfMonth(),
                     selTime[0], selTime[1]);
             }
+            boolean canSaveReminders = reminder != null
+                    && LocalDateTime.of(selDate[0], java.time.LocalTime.of(selTime[0], selTime[1]))
+                            .isAfter(LocalDateTime.now());
+            LocalDateTime deadlineValue = reminder != null
+                    ? LocalDateTime.of(selDate[0], java.time.LocalTime.of(selTime[0], selTime[1]))
+                    : null;
             // 取得分類
             String selectedCat = (String) catCombo.getSelectedItem();
             if ("（未分類）".equals(selectedCat)) selectedCat = "";
@@ -579,14 +642,18 @@ public class TodoPanel extends JPanel {
             if (isEdit) {
                 editItem.setTitle(titleVal);
                 editItem.setDescription(descArea.getText().trim());
-                editItem.setReminderTime(reminder);
+                editItem.setDeadlineTime(reminder);
+                editItem.setReminders(canSaveReminders
+                        ? reminderPanel.getReminders(deadlineValue) : java.util.Collections.emptyList());
                 editItem.setCategory(selectedCat);
-                remindedIds.remove(editItem.getId());
             } else {
                 int nextId = todos.isEmpty() ? 1
                         : todos.stream().mapToInt(TodoItem::getId).max().orElse(0) + 1;
                 TodoItem item = new TodoItem(nextId, titleVal,
                         descArea.getText().trim(), reminder);
+                item.setDeadlineTime(reminder);
+                item.setReminders(canSaveReminders
+                        ? reminderPanel.getReminders(deadlineValue) : java.util.Collections.emptyList());
                 item.setCategory(selectedCat);
                 todos.add(item);
             }
@@ -598,9 +665,27 @@ public class TodoPanel extends JPanel {
         dlg.setVisible(true);
     }
 
+    private static void liftDialogIntoView(JDialog dlg) {
+        Rectangle bounds = GraphicsEnvironment
+                .getLocalGraphicsEnvironment()
+                .getMaximumWindowBounds();
+        int topPadding = 8;
+        int bottomPadding = 16;
+        int y = bounds.y + topPadding;
+        if (y + dlg.getHeight() > bounds.y + bounds.height - bottomPadding) {
+            y = bounds.y + bounds.height - bottomPadding - dlg.getHeight();
+        }
+        dlg.setLocation(dlg.getX(), Math.max(bounds.y + topPadding, y));
+    }
+
+    private static LocalDateTime nextFullHour() {
+        LocalDateTime now = LocalDateTime.now();
+        return now.withMinute(0).withSecond(0).withNano(0).plusHours(1);
+    }
+
     private static JLabel fieldLabel(String text) {
         JLabel l = new JLabel(text);
-        l.setFont(AppFonts.LABEL);
+        l.setFont(AppFonts.BODY_SMALL);
         l.setForeground(AppColors.TEXT_SECONDARY);
         l.setAlignmentX(Component.LEFT_ALIGNMENT);
         return l;
@@ -615,9 +700,12 @@ public class TodoPanel extends JPanel {
 
     // ── 更新清單顯示（套用篩選） ──────────────────────────────────────────────
     public void refreshList() {
+        if (clearOverdueReminders()) {
+            saveCallback.run();
+        }
         todos.sort((a, b) -> {
             if (a.isCompleted() != b.isCompleted()) return a.isCompleted() ? 1 : -1;
-            String ta = a.getReminderTime(), tb = b.getReminderTime();
+            String ta = a.getDeadlineTime(), tb = b.getDeadlineTime();
             if (ta == null && tb == null) return 0;
             if (ta == null) return 1;
             if (tb == null) return -1;
@@ -670,23 +758,48 @@ public class TodoPanel extends JPanel {
         });
     }
 
-    // ── Reminder ──────────────────────────────────────────────────────────────
-    private void scanReminders() {
-        for (TodoItem t : todos) maybeShowReminder(t);
+    private boolean clearOverdueReminders() {
+        boolean changed = false;
+        LocalDateTime now = LocalDateTime.now();
+        for (TodoItem todo : todos) {
+            if (todo.getReminders().isEmpty()) continue;
+            LocalDateTime deadline = parseDeadline(todo.getDeadlineTime());
+            if (deadline != null && !deadline.isAfter(now)) {
+                todo.setReminders(java.util.Collections.emptyList());
+                changed = true;
+            }
+        }
+        return changed;
     }
 
-    private void maybeShowReminder(TodoItem todo) {
-        if (todo.getReminderTime() == null || todo.isCompleted()) return;
-        try {
-            LocalDateTime target = LocalDateTime.parse(todo.getReminderTime(), REMINDER_FMT);
-            long diff = java.time.Duration.between(LocalDateTime.now(), target).toMinutes();
-            if (diff >= 0 && diff <= 240 && !remindedIds.contains(todo.getId())) {
-                remindedIds.add(todo.getId());
-                JOptionPane.showMessageDialog(this,
-                        "提醒：「" + todo.getTitle() + "」將在四小時內到期。",
-                        "代辦提醒", JOptionPane.INFORMATION_MESSAGE);
+    public void revealTodo(int todoId) {
+        currentFilter = CategoryManager.ALL;
+        refreshList();
+        SwingUtilities.invokeLater(() -> {
+            for (Component component : listContainer.getComponents()) {
+                if (Integer.valueOf(todoId).equals(((JComponent) component).getClientProperty("todoId"))) {
+                    ((JComponent) component).scrollRectToVisible(component.getBounds());
+                    component.setBackground(AppColors.ACCENT_LIGHT);
+                    component.repaint();
+                    Timer timer = new Timer(1200, e -> {
+                        refreshList();
+                        ((Timer) e.getSource()).stop();
+                    });
+                    timer.setRepeats(false);
+                    timer.start();
+                    return;
+                }
             }
-        } catch (DateTimeParseException ignored) {}
+        });
+    }
+
+    private static LocalDateTime parseDeadline(String value) {
+        if (value == null || value.isBlank()) return null;
+        try {
+            return LocalDateTime.parse(value, REMINDER_FMT);
+        } catch (DateTimeParseException ex) {
+            return null;
+        }
     }
 
     private static JButton pickerBtn(String text) {
@@ -703,3 +816,4 @@ public class TodoPanel extends JPanel {
         return b;
     }
 }
+
