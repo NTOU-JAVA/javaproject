@@ -148,12 +148,10 @@ public class CategoryTagBar extends JPanel {
             @Override protected void paintComponent(Graphics g) {
                 Graphics2D g2 = (Graphics2D) g.create();
                 g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-                g2.setColor(new Color(0xF0F0F0));
-                g2.fillRect(0, 0, getWidth(), getHeight());
-                int W = getWidth()-7, H = getHeight()-7, R = 14;
-                for (int i = 4; i >= 1; i--) {
-                    g2.setColor(new Color(0,0,0, 7*i));
-                    g2.fillRoundRect(i+1, i+2, getWidth()-i*2-1, getHeight()-i*2-1, R, R);
+                int shadow = 9, W = getWidth() - shadow, H = getHeight() - shadow, R = 14;
+                for (int i = shadow; i >= 1; i--) {
+                    g2.setColor(new Color(0, 0, 0, 2 + i));
+                    g2.fillRoundRect(i / 2, i / 2 + 1, getWidth() - i - 1, getHeight() - i - 1, R, R);
                 }
                 g2.setColor(Color.WHITE);
                 g2.fillRoundRect(0, 0, W, H, R, R);
@@ -170,7 +168,7 @@ public class CategoryTagBar extends JPanel {
             }
         };
         root.setOpaque(false);
-        root.setBorder(new EmptyBorder(0,0,7,7));
+        root.setBorder(new EmptyBorder(0,0,9,9));
         dlg.add(root);
 
         // Header
@@ -269,6 +267,7 @@ public class CategoryTagBar extends JPanel {
 
         dlg.pack();
         dlg.setSize(340 + 7, dlg.getPreferredSize().height);
+        AppUIManager.applyRoundedWindowShape(dlg, 16);
         dlg.setLocationRelativeTo(owner);
         dlg.setVisible(true);
     }
@@ -396,12 +395,10 @@ public class CategoryTagBar extends JPanel {
             @Override protected void paintComponent(Graphics g) {
                 Graphics2D g2 = (Graphics2D) g.create();
                 g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-                g2.setColor(new Color(0xF0F0F0));
-                g2.fillRect(0, 0, getWidth(), getHeight());
-                int W = getWidth()-7, H = getHeight()-7, R = 14;
-                for (int i = 4; i >= 1; i--) {
-                    g2.setColor(new Color(0,0,0, 7*i));
-                    g2.fillRoundRect(i+1, i+2, getWidth()-i*2-1, getHeight()-i*2-1, R, R);
+                int shadow = 9, W = getWidth() - shadow, H = getHeight() - shadow, R = 14;
+                for (int i = shadow; i >= 1; i--) {
+                    g2.setColor(new Color(0, 0, 0, 2 + i));
+                    g2.fillRoundRect(i / 2, i / 2 + 1, getWidth() - i - 1, getHeight() - i - 1, R, R);
                 }
                 g2.setColor(Color.WHITE);
                 g2.fillRoundRect(0, 0, W, H, R, R);
@@ -418,7 +415,7 @@ public class CategoryTagBar extends JPanel {
             }
         };
         root.setOpaque(false);
-        root.setBorder(new EmptyBorder(0,0,7,7));
+        root.setBorder(new EmptyBorder(0,0,9,9));
         renameDlg.add(root);
 
         // Header
@@ -530,6 +527,7 @@ public class CategoryTagBar extends JPanel {
 
         renameDlg.pack();
         renameDlg.setSize(300 + 7, renameDlg.getPreferredSize().height);
+        AppUIManager.applyRoundedWindowShape(renameDlg, 16);
         renameDlg.setLocationRelativeTo(parentDlg);
         renameDlg.setVisible(true);
     }

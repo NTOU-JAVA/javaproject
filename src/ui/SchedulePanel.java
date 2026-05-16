@@ -363,7 +363,7 @@ public class SchedulePanel extends JPanel {
                     "匯入完成",
                     "已建立新課表「" + imported.getName() + "」。",
                     "共匯入 " + imported.getCourses().size() + " 門課程。",
-                    AppColors.ACCENT);
+                    AppColors.SUCCESS);
         } catch (Exception ex) {
             showImportResultDialog(
                     "無法匯入課表",
@@ -423,6 +423,7 @@ public class SchedulePanel extends JPanel {
         dlg.getRootPane().setDefaultButton(importBtn);
         dlg.pack();
         dlg.setSize(Math.max(760, dlg.getWidth()), Math.max(500, dlg.getHeight()));
+        AppUIManager.applyRoundedWindowShape(dlg, 16);
         dlg.setLocationRelativeTo(this);
         dlg.setVisible(true);
         return selected[0];
@@ -1076,12 +1077,10 @@ public class SchedulePanel extends JPanel {
             @Override protected void paintComponent(Graphics g) {
                 Graphics2D g2 = (Graphics2D) g.create();
                 g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-                g2.setColor(new Color(0xF0F0F0));
-                g2.fillRect(0, 0, getWidth(), getHeight());
-                int W = getWidth() - 7, H = getHeight() - 7, R = 14;
-                for (int i = 4; i >= 1; i--) {
-                    g2.setColor(new Color(0, 0, 0, 7 * i));
-                    g2.fillRoundRect(i + 1, i + 2, getWidth() - i * 2 - 1, getHeight() - i * 2 - 1, R, R);
+                int shadow = 9, W = getWidth() - shadow, H = getHeight() - shadow, R = 14;
+                for (int i = shadow; i >= 1; i--) {
+                    g2.setColor(new Color(0, 0, 0, 2 + i));
+                    g2.fillRoundRect(i / 2, i / 2 + 1, getWidth() - i - 1, getHeight() - i - 1, R, R);
                 }
                 g2.setColor(Color.WHITE);
                 g2.fillRoundRect(0, 0, W, H, R, R);
@@ -1099,7 +1098,7 @@ public class SchedulePanel extends JPanel {
             }
         };
         root.setOpaque(false);
-        root.setBorder(new EmptyBorder(0, 0, 7, 7));
+        root.setBorder(new EmptyBorder(0, 0, 9, 9));
         dlg.add(root);
 
         JPanel header = new JPanel(new BorderLayout());
@@ -1259,6 +1258,7 @@ public class SchedulePanel extends JPanel {
         dlg.getRootPane().setDefaultButton(okBtn);
         dlg.pack();
         dlg.setSize(Math.max(380, dlg.getWidth()), dlg.getHeight());
+        AppUIManager.applyRoundedWindowShape(dlg, 16);
         dlg.setLocationRelativeTo(this);
         dlg.setVisible(true);
     }
@@ -1380,6 +1380,7 @@ public class SchedulePanel extends JPanel {
 
         dlg.pack();
         dlg.setSize(320 + 7, dlg.getHeight());
+        AppUIManager.applyRoundedWindowShape(dlg, 16);
         dlg.setLocationRelativeTo(this);
         dlg.setVisible(true);
     }
@@ -1390,7 +1391,7 @@ public class SchedulePanel extends JPanel {
     private void showCourseDialog(Course editCourse) {
         boolean isEdit = (editCourse != null);
         Window owner = SwingUtilities.getWindowAncestor(this);
-        Color accentColor = isEdit ? AppColors.ACCENT : AppColors.SUCCESS;
+        Color accentColor = AppColors.ACCENT;
 
         JDialog dlg = new JDialog(owner, "", Dialog.ModalityType.APPLICATION_MODAL);
         JPanel root = buildFloatingRoot(dlg, isEdit ? "編輯課程" : "新增課程", accentColor);
@@ -1692,6 +1693,7 @@ public class SchedulePanel extends JPanel {
         int screenH = Toolkit.getDefaultToolkit().getScreenSize().height;
         int maxH    = (int)(screenH * 0.85);
         dlg.setSize(dlg.getWidth(), Math.min(dlg.getHeight(), maxH));
+        AppUIManager.applyRoundedWindowShape(dlg, 16);
         dlg.setLocationRelativeTo(null);
         dlg.setVisible(true);
     }

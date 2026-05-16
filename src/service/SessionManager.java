@@ -2,8 +2,8 @@ package service;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.function.Consumer;
 import javax.swing.*;
+import persistence.TronclassSessionStore;
 
 /**
  * SessionManager：集中管理 Tronclass 登入狀態。
@@ -27,6 +27,7 @@ public class SessionManager {
     private String cookie   = null;
 
     private final List<SessionListener> listeners = new ArrayList<>();
+    private final TronclassSessionStore sessionStore = new TronclassSessionStore();
 
     // ── 查詢 ────────────────────────────────────────────────────────────────
 
@@ -40,7 +41,19 @@ public class SessionManager {
     public void onLoginSuccess(String name, String cookie) {
         this.userName = name;
         this.cookie   = cookie;
+        sessionStore.save(name, cookie);
         setState(State.LOGGED_IN);
+    }
+
+    // ── 程式啟動時嘗試恢復上次登入 ─────────────────────────────────────────
+
+    public boolean restoreSavedSession() {
+        TronclassSessionStore.SavedSession saved = sessionStore.load();
+        if (saved == null) return false;
+        this.userName = saved.getUserName();
+        this.cookie = saved.getCookie();
+        setState(State.LOGGED_IN);
+        return true;
     }
 
     // ── 主動登出 ─────────────────────────────────────────────────────────────
@@ -48,6 +61,7 @@ public class SessionManager {
     public void logout() {
         this.userName = null;
         this.cookie   = null;
+        sessionStore.clear();
         setState(State.LOGGED_OUT);
     }
 
@@ -56,6 +70,7 @@ public class SessionManager {
     public void notifySessionExpired() {
         if (state != State.LOGGED_IN) return; // 避免重複觸發
         this.cookie = null;
+        sessionStore.clear();
         setState(State.EXPIRED);
     }
 

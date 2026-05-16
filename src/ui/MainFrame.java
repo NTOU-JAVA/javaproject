@@ -112,6 +112,9 @@ public class MainFrame extends JFrame {
 
         // 監聽 Session 狀態變化
         sessionManager.addListener((state, userName) -> onSessionStateChanged(state, userName));
+        if (sessionManager.restoreSavedSession()) {
+            validateCookieInBackground();
+        }
 
         // 啟動背景定時驗證（2 分鐘）
         cookieValidationTimer = new Timer(2 * 60 * 1000, e -> validateCookieInBackground());
@@ -230,9 +233,9 @@ public class MainFrame extends JFrame {
 
         JLabel warnLbl = new JLabel("登入已失效");
         warnLbl.setFont(AppFonts.BODY_SMALL);
-        warnLbl.setForeground(AppColors.WARNING);
+        warnLbl.setForeground(AppColors.DANGER);
 
-        JButton reloginBtn = topbarBtn("重新登入", AppColors.WARNING_LIGHT, AppColors.WARNING);
+        JButton reloginBtn = topbarBtn("重新登入", AppColors.DANGER_LIGHT, AppColors.DANGER);
         reloginBtn.addActionListener(e -> openLoginDialog());
 
         JButton logoutBtn = topbarBtn("清除登入", AppColors.BG_TERTIARY, AppColors.TEXT_SECONDARY);
@@ -293,27 +296,26 @@ public class MainFrame extends JFrame {
     private void showSessionExpiredNotification(String lastUserName) {
         String who = (lastUserName != null && !lastUserName.isEmpty())
                 ? "「" + lastUserName + "」的" : "";
-        JOptionPane.showMessageDialog(
-            this,
-            "<html><b>Tronclass 登入已失效</b><br><br>"
-            + who + "Cookie 已過期或被登出。<br>"
-            + "請點擊右上角「重新登入」以繼續同步資料。</html>",
+        showTronclassMessageDialog(
             "登入已失效",
-            JOptionPane.WARNING_MESSAGE
+            who + "Cookie 已過期或被登出。",
+            "請點擊右上角「重新登入」以繼續同步資料。",
+            AppColors.DANGER,
+            DialogIcon.WARNING
         );
     }
 
     /** 確認登出彈窗 */
     private void confirmLogout() {
-        int choice = JOptionPane.showConfirmDialog(
-            this,
-            "<html>確定要登出 Tronclass 嗎？<br>"
-            + "<span style='color:#6B6A67;font-size:11px'>本機的代辦事項資料不會被刪除。</span></html>",
+        boolean confirmed = showTronclassConfirmDialog(
             "確認登出",
-            JOptionPane.YES_NO_OPTION,
-            JOptionPane.QUESTION_MESSAGE
+            "確定要登出 Tronclass 嗎？",
+            "本機的代辦事項資料不會被刪除。",
+            "登出",
+            AppColors.DANGER,
+            DialogIcon.WARNING
         );
-        if (choice == JOptionPane.YES_OPTION) {
+        if (confirmed) {
             sessionManager.logout();
         }
     }
@@ -353,14 +355,215 @@ public class MainFrame extends JFrame {
                     String msg = added > 0
                         ? "已同步 " + added + " 筆待辦事項到「代辦事項」頁面。"
                         : "登入成功，無新的待辦事項。";
-                    JOptionPane.showMessageDialog(this,
-                        "<html><b>" + displayName + "</b> 您好！<br>" + msg + "</html>",
+                    showTronclassMessageDialog(
                         "Tronclass 同步完成",
-                        JOptionPane.INFORMATION_MESSAGE);
+                        displayName + " 您好！",
+                        msg,
+                        AppColors.SUCCESS,
+                        DialogIcon.SUCCESS
+                    );
                 });
             }
         );
         dlg.setVisible(true);
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // Tronclass 狀態 Dialog
+    // ══════════════════════════════════════════════════════════════════════════
+
+    private enum DialogIcon { SUCCESS, WARNING }
+
+    private void showTronclassMessageDialog(String title, String message, String detail,
+                                            Color accentColor, DialogIcon iconType) {
+        JDialog dlg = new JDialog(this, "", Dialog.ModalityType.APPLICATION_MODAL);
+        JPanel root = buildFloatingDialogRoot(dlg, title, accentColor);
+
+        root.add(buildDialogContent(message, detail, accentColor, iconType), BorderLayout.CENTER);
+        root.add(buildDialogButtonRow(dlg, "知道了", accentColor, null), BorderLayout.SOUTH);
+
+        dlg.pack();
+        dlg.setSize(Math.max(380, dlg.getWidth()), dlg.getHeight());
+        AppUIManager.applyRoundedWindowShape(dlg, 16);
+        dlg.setLocationRelativeTo(this);
+        dlg.setVisible(true);
+    }
+
+    private boolean showTronclassConfirmDialog(String title, String message, String detail,
+                                               String okLabel, Color accentColor,
+                                               DialogIcon iconType) {
+        final boolean[] confirmed = {false};
+        JDialog dlg = new JDialog(this, "", Dialog.ModalityType.APPLICATION_MODAL);
+        JPanel root = buildFloatingDialogRoot(dlg, title, accentColor);
+
+        root.add(buildDialogContent(message, detail, accentColor, iconType), BorderLayout.CENTER);
+        root.add(buildDialogButtonRow(dlg, okLabel, accentColor, () -> confirmed[0] = true), BorderLayout.SOUTH);
+
+        dlg.pack();
+        dlg.setSize(Math.max(380, dlg.getWidth()), dlg.getHeight());
+        AppUIManager.applyRoundedWindowShape(dlg, 16);
+        dlg.setLocationRelativeTo(this);
+        dlg.setVisible(true);
+        return confirmed[0];
+    }
+
+    private JPanel buildFloatingDialogRoot(JDialog dlg, String title, Color accentColor) {
+        dlg.setUndecorated(true);
+        dlg.setLayout(new BorderLayout());
+        dlg.setBackground(new Color(0xF0F0F0));
+
+        Color headerBg = blendWithWhite(accentColor, 0.10f);
+        JPanel root = new JPanel(new BorderLayout()) {
+            @Override protected void paintComponent(Graphics g) {
+                Graphics2D g2 = (Graphics2D) g.create();
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                int shadow = 9, W = getWidth() - shadow, H = getHeight() - shadow, R = 14;
+                for (int i = shadow; i >= 1; i--) {
+                    g2.setColor(new Color(0, 0, 0, 2 + i));
+                    g2.fillRoundRect(i / 2, i / 2 + 1, getWidth() - i - 1, getHeight() - i - 1, R, R);
+                }
+                g2.setColor(Color.WHITE);
+                g2.fillRoundRect(0, 0, W, H, R, R);
+                Component comp = getComponentCount() > 0 ? getComponent(0) : null;
+                if (comp != null) {
+                    int headerHeight = comp.getHeight();
+                    g2.setColor(headerBg);
+                    g2.fillRoundRect(0, 0, W, R + headerHeight, R, R);
+                    g2.fillRect(0, R, W, headerHeight - R);
+                }
+                g2.setColor(AppColors.BORDER_HOVER);
+                g2.setStroke(new BasicStroke(1.5f));
+                g2.drawRoundRect(0, 0, W - 1, H - 1, R, R);
+                g2.dispose();
+            }
+        };
+        root.setOpaque(false);
+        root.setBorder(new EmptyBorder(0, 0, 9, 9));
+        dlg.add(root);
+
+        JPanel header = new JPanel(new BorderLayout());
+        header.setOpaque(false);
+        header.setBorder(new EmptyBorder(12, 16, 12, 10));
+
+        JLabel titleLbl = new JLabel(title);
+        titleLbl.setFont(AppFonts.TITLE_SMALL);
+        titleLbl.setForeground(accentColor);
+
+        JButton closeBtn = new JButton("×");
+        closeBtn.setFont(new Font(AppFonts.BODY_MEDIUM.getFamily(), Font.PLAIN, 16));
+        closeBtn.setForeground(AppColors.TEXT_TERTIARY);
+        closeBtn.setBorder(new EmptyBorder(0, 8, 0, 4));
+        closeBtn.setFocusPainted(false);
+        closeBtn.setContentAreaFilled(false);
+        closeBtn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        closeBtn.addActionListener(e -> dlg.dispose());
+
+        header.add(titleLbl, BorderLayout.CENTER);
+        header.add(closeBtn, BorderLayout.EAST);
+        root.add(header, BorderLayout.NORTH);
+        return root;
+    }
+
+    private JPanel buildDialogContent(String message, String detail, Color accentColor, DialogIcon iconType) {
+        JPanel content = new JPanel(new BorderLayout(12, 0));
+        content.setOpaque(false);
+        content.setBorder(new EmptyBorder(18, 18, 18, 18));
+
+        JPanel icon = new JPanel() {
+            @Override protected void paintComponent(Graphics g) {
+                Graphics2D g2 = (Graphics2D) g.create();
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                g2.setColor(blendWithWhite(accentColor, 0.12f));
+                g2.fillOval(0, 0, getWidth(), getHeight());
+                g2.setColor(accentColor);
+                g2.setStroke(new BasicStroke(1.5f));
+                g2.drawOval(1, 1, getWidth() - 3, getHeight() - 3);
+                g2.setStroke(new BasicStroke(2.4f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+                int w = getWidth();
+                int h = getHeight();
+                if (iconType == DialogIcon.WARNING) {
+                    int cx = w / 2;
+                    g2.drawLine(cx, h / 4, cx, h / 2 + 4);
+                    g2.fillOval(cx - 1, h - 11, 3, 3);
+                } else {
+                    g2.drawLine(w / 4 + 1, h / 2 + 1, w / 2 - 3, h * 3 / 4 - 3);
+                    g2.drawLine(w / 2 - 3, h * 3 / 4 - 3, w * 3 / 4 + 2, h / 3);
+                }
+                g2.dispose();
+            }
+        };
+        icon.setOpaque(false);
+        icon.setPreferredSize(new Dimension(38, 38));
+
+        JPanel textCol = new JPanel();
+        textCol.setLayout(new BoxLayout(textCol, BoxLayout.Y_AXIS));
+        textCol.setOpaque(false);
+        textCol.add(dialogTextArea(message, AppFonts.BODY_MEDIUM, AppColors.TEXT_PRIMARY));
+
+        if (detail != null && !detail.isBlank()) {
+            textCol.add(Box.createRigidArea(new Dimension(0, 6)));
+            textCol.add(dialogTextArea(detail, AppFonts.BODY_SMALL, AppColors.TEXT_SECONDARY));
+        }
+
+        content.add(icon, BorderLayout.WEST);
+        content.add(textCol, BorderLayout.CENTER);
+        return content;
+    }
+
+    private JTextArea dialogTextArea(String text, Font font, Color color) {
+        JTextArea area = new JTextArea(text);
+        area.setFont(font);
+        area.setForeground(color);
+        area.setEditable(false);
+        area.setFocusable(false);
+        area.setLineWrap(true);
+        area.setWrapStyleWord(true);
+        area.setOpaque(false);
+        area.setBorder(null);
+        area.setAlignmentX(Component.LEFT_ALIGNMENT);
+        return area;
+    }
+
+    private JPanel buildDialogButtonRow(JDialog dlg, String okLabel, Color okBg, Runnable onOk) {
+        JPanel btnRow = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 10));
+        btnRow.setBackground(new Color(0xFAF9F7));
+        btnRow.setOpaque(true);
+        btnRow.setBorder(new MatteBorder(1, 0, 0, 0, AppColors.BORDER_DEFAULT));
+
+        if (onOk != null) {
+            JButton cancelBtn = dialogButton("取消", AppColors.BG_TERTIARY, AppColors.TEXT_SECONDARY);
+            cancelBtn.addActionListener(e -> dlg.dispose());
+            btnRow.add(cancelBtn);
+        }
+
+        JButton okBtn = dialogButton(okLabel, okBg, Color.WHITE);
+        okBtn.addActionListener(e -> {
+            if (onOk != null) onOk.run();
+            dlg.dispose();
+        });
+        btnRow.add(okBtn);
+        dlg.getRootPane().setDefaultButton(okBtn);
+        return btnRow;
+    }
+
+    private JButton dialogButton(String text, Color bg, Color fg) {
+        JButton b = new JButton(text);
+        b.setFont(AppFonts.BODY_SMALL);
+        b.setBackground(bg);
+        b.setForeground(fg);
+        b.setBorder(new EmptyBorder(6, 18, 6, 18));
+        b.setFocusPainted(false);
+        b.setOpaque(true);
+        b.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        return b;
+    }
+
+    private Color blendWithWhite(Color c, float ratio) {
+        return new Color(
+            (int)(c.getRed()   * ratio + 255 * (1 - ratio)),
+            (int)(c.getGreen() * ratio + 255 * (1 - ratio)),
+            (int)(c.getBlue()  * ratio + 255 * (1 - ratio))
+        );
     }
 
     // ══════════════════════════════════════════════════════════════════════════

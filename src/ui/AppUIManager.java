@@ -2,6 +2,7 @@ package ui;
 
 import java.awt.*;
 import java.awt.event.*;
+import java.awt.geom.RoundRectangle2D;
 import java.time.LocalDate;
 import java.time.YearMonth;
 import java.time.format.DateTimeFormatter;
@@ -18,6 +19,22 @@ import javax.swing.plaf.basic.BasicScrollBarUI;
 public class AppUIManager {
 
     private AppUIManager() {}
+
+    public static void applyRoundedWindowShape(Window window, int arc) {
+        if (window == null) return;
+        Runnable updateShape = () -> {
+            int w = window.getWidth();
+            int h = window.getHeight();
+            if (w > 0 && h > 0) {
+                window.setShape(new RoundRectangle2D.Double(0, 0, w, h, arc, arc));
+            }
+        };
+        window.addComponentListener(new ComponentAdapter() {
+            @Override public void componentResized(ComponentEvent e) { updateShape.run(); }
+            @Override public void componentShown(ComponentEvent e) { updateShape.run(); }
+        });
+        updateShape.run();
+    }
 
     // ══════════════════════════════════════════════════════════
     // 1.  細線 ScrollBar

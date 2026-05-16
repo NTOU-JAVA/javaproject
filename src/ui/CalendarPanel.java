@@ -614,18 +614,15 @@ public class CalendarPanel extends JPanel {
         dlg.setLayout(new BorderLayout());
         dlg.setBackground(new Color(0xF0F0F0));
 
-        boolean isImportant = isEdit && editTask.isImportant();
-        Color headerBg = isImportant ? AppColors.DANGER_LIGHT : AppColors.ACCENT_LIGHT;
+        Color headerBg = AppColors.ACCENT_LIGHT;
         JPanel root = new JPanel(new BorderLayout()) {
             @Override protected void paintComponent(Graphics g) {
                 Graphics2D g2 = (Graphics2D) g.create();
                 g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-                g2.setColor(new Color(0xF0F0F0));
-                g2.fillRect(0, 0, getWidth(), getHeight());
-                int W = getWidth()-7, H = getHeight()-7, R = 14;
-                for (int i = 4; i >= 1; i--) {
-                    g2.setColor(new Color(0, 0, 0, 7 * i));
-                    g2.fillRoundRect(i + 1, i + 2, getWidth() - i * 2 - 1, getHeight() - i * 2 - 1, R, R);
+                int shadow = 9, W = getWidth() - shadow, H = getHeight() - shadow, R = 14;
+                for (int i = shadow; i >= 1; i--) {
+                    g2.setColor(new Color(0, 0, 0, 2 + i));
+                    g2.fillRoundRect(i / 2, i / 2 + 1, getWidth() - i - 1, getHeight() - i - 1, R, R);
                 }
                 g2.setColor(Color.WHITE);
                 g2.fillRoundRect(0, 0, W, H, R, R);
@@ -642,7 +639,7 @@ public class CalendarPanel extends JPanel {
             }
         };
         root.setOpaque(false);
-        root.setBorder(new EmptyBorder(0, 0, 7, 7));
+        root.setBorder(new EmptyBorder(0, 0, 9, 9));
         dlg.add(root);
 
         JPanel header = new JPanel(new BorderLayout());
@@ -652,7 +649,7 @@ public class CalendarPanel extends JPanel {
 
         JLabel headerTitle = new JLabel(isEdit ? "編輯任務" : "新增任務");
         headerTitle.setFont(AppFonts.TITLE_SMALL);
-        headerTitle.setForeground(isImportant ? AppColors.DANGER : AppColors.ACCENT);
+        headerTitle.setForeground(AppColors.ACCENT);
 
         JButton closeBtn = new JButton("×");
         closeBtn.setFont(new Font(AppFonts.BODY_MEDIUM.getFamily(), Font.PLAIN, 16));
@@ -806,6 +803,7 @@ public class CalendarPanel extends JPanel {
 
         dlg.pack();
         dlg.setSize(400, dlg.getPreferredSize().height);
+        AppUIManager.applyRoundedWindowShape(dlg, 16);
         dlg.setLocationRelativeTo(this);
 
         cancelBtn.addActionListener(e -> dlg.dispose());
