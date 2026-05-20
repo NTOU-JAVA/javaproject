@@ -11,6 +11,7 @@ public class TodoItem {
     private String deadlineTime;
     private boolean completed;
     private String category;
+    private String sourceUrl;
     private final List<Reminder> reminders = new ArrayList<>();
 
     public TodoItem() {}
@@ -58,6 +59,14 @@ public class TodoItem {
 
     public String getCategory() { return category != null ? category : ""; }
     public void setCategory(String category) { this.category = category != null ? category : ""; }
+
+    public String getSourceUrl() { 
+    return sourceUrl != null ? sourceUrl : ""; 
+    }
+
+    public void setSourceUrl(String sourceUrl) { 
+        this.sourceUrl = sourceUrl; 
+    }
 
     public List<Reminder> getReminders() { return reminders; }
     public void setReminders(List<Reminder> reminders) {

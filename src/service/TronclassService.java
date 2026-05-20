@@ -139,8 +139,13 @@ public class TronclassService {
             
             maxId++;
             String mappedCategory = mapToCategory(tt.type);
-            
-            TodoItem item = new TodoItem(maxId, tt.title, "", formatDeadline(tt.deadline));
+            TodoItem item = new TodoItem(
+                maxId,
+                tt.title,
+                tt.url != null ? tt.url : "",
+                formatDeadline(tt.deadline)
+            );
+            item.setSourceUrl(tt.url);
             item.setCategory(mappedCategory);
             currentTodos.add(item);
             added++;
@@ -211,6 +216,16 @@ public class TronclassService {
         item.title    = title;
         item.type     = coalesce(first(obj, "type", "activity_type", "category"), "其他");
         item.deadline = coalesce(first(obj, "deadline", "end_time", "due_date", "end_at"), null);
+
+        item.courseId   = first(obj, "course_id");
+        item.activityId = first(obj, "id");
+
+        if (item.courseId != null && item.activityId != null) {
+            item.url = BASE_URL + "/course/"
+                    + item.courseId
+                    + "/learning-activity/full-screen#/"
+                    + item.activityId;
+        }
         return item;
 }
 
@@ -332,6 +347,12 @@ public class TronclassService {
     // ── 內部 DTO ─────────────────────────────────────────────────────────────
 
     static class TronclassTodo {
-        String title, type, deadline;
+        String title;
+        String type;
+        String deadline;
+
+        String courseId;
+        String activityId;
+        String url;
     }
 }
