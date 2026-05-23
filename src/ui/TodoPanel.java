@@ -4,7 +4,9 @@ import java.awt.event.*;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import javax.swing.*;
 import javax.swing.border.*;
 import model.Reminder;
@@ -23,10 +25,14 @@ public class TodoPanel extends JPanel {
     private static final int DIALOG_MIN_WIDTH = 460;
     private static final int DIALOG_MAX_WIDTH = 480;
     private static final int DIALOG_MIN_HEIGHT = 0;
+    private static final int DESC_COLLAPSED_MAX_LINES = 3;
+    private static final int DESC_COLLAPSED_MAX_CHARS = 180;
+    private static final int DESC_EXPANDED_MAX_HEIGHT = 150;
 
     private final List<TodoItem>         todos;
     private final Runnable               saveCallback;
     private final CategoryManager        categoryManager;
+    private final Set<Integer>           expandedDescriptions = new HashSet<>();
 
     // 清單容器（BoxLayout 垂直排列）
     private final JPanel listContainer = new JPanel();
@@ -129,6 +135,7 @@ public class TodoPanel extends JPanel {
         sp.setBorder(new MatteBorder(1, 0, 0, 0, AppColors.BORDER_DEFAULT));
         // 1. 強制關閉水平滾動條，與 TodoPanel 保持一致
         sp.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+        sp.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED);
         sp.getViewport().setBackground(AppColors.BG_PRIMARY);
         sp.getVerticalScrollBar().setUnitIncrement(20);
         
@@ -235,13 +242,8 @@ public class TodoPanel extends JPanel {
 
         if (!item.isCompleted()) {
             if (!desc.isEmpty()) {
-                String descHtml = "<html><font color='#A8A7A4'>"
-                        + escHtml(desc).replace("\n", "<br>") + "</font></html>";
-                JLabel descLbl = new JLabel(descHtml);
-                descLbl.setFont(AppFonts.CAPTION);
-                descLbl.setAlignmentX(Component.LEFT_ALIGNMENT);
                 center.add(Box.createRigidArea(new Dimension(0, 1)));
-                center.add(descLbl);
+                center.add(buildDescriptionBlock(item, desc, row));
             }
             if (rt != null) {
                 Color timeColor = AppColors.TEXT_TERTIARY;
@@ -303,6 +305,7 @@ public class TodoPanel extends JPanel {
         delBtn.addActionListener(e -> actionsCard.show(actions, "confirm"));
         cancelDelBtn.addActionListener(e -> actionsCard.show(actions, "normal"));
         confirmDelBtn.addActionListener(e -> {
+            expandedDescriptions.remove(item.getId());
             todos.remove(item);
             refreshList();
             saveCallback.run();
@@ -356,6 +359,120 @@ public class TodoPanel extends JPanel {
 
     private static String escHtml(String s) {
         return s.replace("&","&amp;").replace("<","&lt;").replace(">","&gt;");
+    }
+
+    private JComponent buildDescriptionBlock(TodoItem item, String description, JPanel row) {
+        boolean expanded = expandedDescriptions.contains(item.getId());
+        boolean expandable = isLongDescription(description);
+
+        JPanel block = new JPanel();
+        block.setLayout(new BoxLayout(block, BoxLayout.Y_AXIS));
+        block.setOpaque(false);
+        block.setAlignmentX(Component.LEFT_ALIGNMENT);
+
+        String visibleText = expanded ? description : summarizeDescription(description);
+        JTextArea descArea = new JTextArea(visibleText);
+        descArea.setFont(AppFonts.CAPTION);
+        descArea.setForeground(AppColors.TEXT_TERTIARY);
+        descArea.setEditable(false);
+        descArea.setFocusable(false);
+        descArea.setLineWrap(true);
+        descArea.setWrapStyleWord(true);
+        descArea.setOpaque(false);
+        descArea.setBorder(null);
+        descArea.setAlignmentX(Component.LEFT_ALIGNMENT);
+        descArea.addMouseListener(new MouseAdapter() {
+            @Override public void mouseClicked(MouseEvent e)  { row.dispatchEvent(SwingUtilities.convertMouseEvent(descArea, e, row)); }
+            @Override public void mouseEntered(MouseEvent e)  { row.dispatchEvent(SwingUtilities.convertMouseEvent(descArea, e, row)); }
+            @Override public void mouseExited(MouseEvent e)   { row.dispatchEvent(SwingUtilities.convertMouseEvent(descArea, e, row)); }
+            @Override public void mousePressed(MouseEvent e)  { row.dispatchEvent(SwingUtilities.convertMouseEvent(descArea, e, row)); }
+            @Override public void mouseReleased(MouseEvent e) { row.dispatchEvent(SwingUtilities.convertMouseEvent(descArea, e, row)); }
+        });
+
+        if (expanded) {
+            JScrollPane descScroll = new JScrollPane(descArea,
+                    JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED,
+                    JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+            descScroll.setBorder(null);
+            descScroll.setOpaque(false);
+            descScroll.getViewport().setOpaque(false);
+            descScroll.getVerticalScrollBar().setUnitIncrement(14);
+            descScroll.setAlignmentX(Component.LEFT_ALIGNMENT);
+            AppUIManager.applySlimScrollBar(descScroll);
+
+            Runnable updateScroll = () -> updateDescriptionScroll(descScroll, descArea);
+            descScroll.getViewport().addComponentListener(new ComponentAdapter() {
+                @Override public void componentResized(ComponentEvent e) {
+                    updateScroll.run();
+                }
+            });
+            SwingUtilities.invokeLater(updateScroll);
+            block.add(descScroll);
+        } else {
+            descArea.setRows(Math.min(DESC_COLLAPSED_MAX_LINES,
+                    Math.max(1, visibleText.split("\\R", -1).length)));
+            block.add(descArea);
+        }
+
+        if (expandable) {
+            JPanel btnRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
+            btnRow.setOpaque(false);
+            btnRow.setAlignmentX(Component.LEFT_ALIGNMENT);
+            JButton toggle = actionBtn(expanded ? "^" : "...",
+                    AppColors.BG_TERTIARY, AppColors.TEXT_SECONDARY);
+            toggle.setToolTipText(expanded ? "Collapse description" : "Show full description");
+            toggle.setBorder(new EmptyBorder(1, 8, 1, 8));
+            toggle.addActionListener(e -> {
+                if (expandedDescriptions.contains(item.getId())) {
+                    expandedDescriptions.remove(item.getId());
+                } else {
+                    expandedDescriptions.add(item.getId());
+                }
+                refreshList();
+            });
+            btnRow.add(toggle);
+            block.add(Box.createRigidArea(new Dimension(0, 2)));
+            block.add(btnRow);
+        }
+
+        return block;
+    }
+
+    private static boolean isLongDescription(String description) {
+        if (description.length() > DESC_COLLAPSED_MAX_CHARS) return true;
+        return description.split("\\R", -1).length > DESC_COLLAPSED_MAX_LINES;
+    }
+
+    private static String summarizeDescription(String description) {
+        String[] lines = description.split("\\R", -1);
+        StringBuilder sb = new StringBuilder();
+        boolean truncated = false;
+        for (int i = 0; i < lines.length && i < DESC_COLLAPSED_MAX_LINES; i++) {
+            if (i > 0) sb.append('\n');
+            sb.append(lines[i]);
+        }
+        if (lines.length > DESC_COLLAPSED_MAX_LINES) truncated = true;
+
+        String summary = sb.toString();
+        if (summary.length() > DESC_COLLAPSED_MAX_CHARS) {
+            summary = summary.substring(0, DESC_COLLAPSED_MAX_CHARS).trim();
+            truncated = true;
+        }
+        return truncated ? summary + "..." : summary;
+    }
+
+    private static void updateDescriptionScroll(JScrollPane sp, JTextArea area) {
+        int width = sp.getViewport().getWidth();
+        if (width <= 0) width = Math.max(240, sp.getWidth());
+        area.setSize(new Dimension(width, Short.MAX_VALUE));
+        int preferredHeight = area.getPreferredSize().height + 2;
+        int height = Math.min(preferredHeight, DESC_EXPANDED_MAX_HEIGHT);
+        sp.setVerticalScrollBarPolicy(preferredHeight > DESC_EXPANDED_MAX_HEIGHT
+                ? JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED
+                : JScrollPane.VERTICAL_SCROLLBAR_NEVER);
+        sp.setPreferredSize(new Dimension(0, height));
+        sp.setMaximumSize(new Dimension(Integer.MAX_VALUE, height));
+        sp.revalidate();
     }
 
     // ── 新增/編輯 Dialog ─────────────────────────────────────────────────────
