@@ -2,26 +2,53 @@ package ui;
 
 import java.awt.*;
 import java.awt.event.*;
+import java.io.IOException;
 import java.net.URI;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import javax.swing.*;
 import javax.swing.border.*;
+import javax.swing.event.DocumentEvent;
+import javax.swing.event.DocumentListener;
 import model.NewsItem;
 import service.SchoolNewsCrawler;
 
 /**
- * SchoolNewsPanel：顯示學校公告的面板。
+ * SchoolNewsPanel：學校/系所公告列表。
  */
 public class SchoolNewsPanel extends JPanel {
 
+    private static final Path STAR_FILE = Path.of("data", "news-stars.txt");
+    private static final Path DEFAULT_UNSTAR_FILE = Path.of("data", "news-default-unstarred.txt");
+    private static final String CATEGORY_ALL = "全部";
+    private static final String[] CATEGORY_OPTIONS = {
+        CATEGORY_ALL, "系所公告", "校園公告", "招生/課務",
+        "競賽/活動", "獎學金/補助", "實習/徵才", "其他"
+    };
+
     private final SchoolNewsCrawler crawler;
     private final JPanel listContainer = new JPanel();
-    private final JLabel statusLabel = new JLabel("按下「重新整理」載入公告與系所消息...");
+    private final JLabel statusLabel = new JLabel("尚未載入公告");
+    private final JTextField searchField = new JTextField();
+    private final JComboBox<String> categoryCombo = new JComboBox<>(CATEGORY_OPTIONS);
+    private final JCheckBox starredOnlyCheck = new JCheckBox("只看星號");
+    private final Set<String> starredUrls = new HashSet<>();
+    private final Set<String> unstarredDefaultUrls = new HashSet<>();
+
     private JButton refreshBtn;
+    private JScrollPane listScrollPane;
     private boolean hasLoaded = false;
 
     public SchoolNewsPanel() {
         this.crawler = new SchoolNewsCrawler(this::onCrawlComplete);
+        loadStars();
+        loadDefaultUnstars();
 
         setLayout(new BorderLayout(0, 0));
         setBackground(AppColors.BG_SECONDARY);
@@ -30,23 +57,19 @@ public class SchoolNewsPanel extends JPanel {
         add(buildListArea(), BorderLayout.CENTER);
         add(buildHintBar(),  BorderLayout.SOUTH);
 
-        // 初次進入時自動載入
         if (!hasLoaded) {
             SwingUtilities.invokeLater(() -> {
-                if (refreshBtn != null) {
-                    refreshBtn.doClick();
-                }
+                if (refreshBtn != null) refreshBtn.doClick();
             });
         }
     }
 
-    // ── 頂部列 ──────────────────────────────────────────────────────────────
     private JPanel buildTopNav() {
-        JPanel nav = new JPanel(new BorderLayout());
+        JPanel nav = new JPanel(new BorderLayout(0, 8));
         nav.setBackground(AppColors.BG_SECONDARY);
         nav.setBorder(new EmptyBorder(12, 16, 8, 16));
 
-        JLabel title = new JLabel("學校公告 / 系所消息");
+        JLabel title = new JLabel("學校公告 / 系所資訊");
         title.setFont(AppFonts.TITLE_MEDIUM);
         title.setForeground(AppColors.TEXT_PRIMARY);
 
@@ -56,15 +79,54 @@ public class SchoolNewsPanel extends JPanel {
         refreshBtn.setForeground(Color.WHITE);
         refreshBtn.setBorder(new EmptyBorder(7, 16, 7, 16));
         refreshBtn.setFocusPainted(false);
+        refreshBtn.setOpaque(true);
         refreshBtn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
         refreshBtn.addActionListener(e -> onRefreshClick());
 
-        nav.add(title,      BorderLayout.WEST);
-        nav.add(refreshBtn, BorderLayout.EAST);
+        JPanel header = new JPanel(new BorderLayout());
+        header.setOpaque(false);
+        header.add(title, BorderLayout.WEST);
+        header.add(refreshBtn, BorderLayout.EAST);
+
+        JPanel filters = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
+        filters.setOpaque(false);
+
+        searchField.setFont(AppFonts.BODY_SMALL);
+        searchField.setToolTipText("輸入關鍵字搜尋公告標題");
+        searchField.setPreferredSize(new Dimension(260, 32));
+        searchField.setBorder(BorderFactory.createCompoundBorder(
+                new LineBorder(AppColors.BORDER_DEFAULT, 1, true),
+                new EmptyBorder(4, 9, 4, 9)));
+        searchField.getDocument().addDocumentListener(new DocumentListener() {
+            @Override public void insertUpdate(DocumentEvent e) { renderNewsList(true); }
+            @Override public void removeUpdate(DocumentEvent e) { renderNewsList(true); }
+            @Override public void changedUpdate(DocumentEvent e) { renderNewsList(true); }
+        });
+
+        categoryCombo.setFont(AppFonts.BODY_SMALL);
+        categoryCombo.setBackground(Color.WHITE);
+        categoryCombo.setForeground(AppColors.TEXT_PRIMARY);
+        SchedulePanel.applyComboStyle(categoryCombo);
+        categoryCombo.addActionListener(e -> {
+            renderNewsList(true);
+        });
+
+        starredOnlyCheck.setFont(AppFonts.BODY_SMALL);
+        starredOnlyCheck.setForeground(AppColors.TEXT_SECONDARY);
+        starredOnlyCheck.setOpaque(false);
+        starredOnlyCheck.addActionListener(e -> renderNewsList(true));
+
+        filters.add(fieldLabel("搜尋"));
+        filters.add(searchField);
+        filters.add(fieldLabel("分類"));
+        filters.add(categoryCombo);
+        filters.add(starredOnlyCheck);
+
+        nav.add(header, BorderLayout.NORTH);
+        nav.add(filters, BorderLayout.SOUTH);
         return nav;
     }
 
-    // ── 清單區 ──────────────────────────────────────────────────────────────
     private JScrollPane buildListArea() {
         listContainer.setLayout(new BoxLayout(listContainer, BoxLayout.Y_AXIS));
         listContainer.setBackground(AppColors.BG_PRIMARY);
@@ -73,30 +135,40 @@ public class SchoolNewsPanel extends JPanel {
         wrapper.setBackground(AppColors.BG_PRIMARY);
         wrapper.add(listContainer, BorderLayout.NORTH);
 
-        JScrollPane sp = new JScrollPane(wrapper);
-        sp.setBorder(new MatteBorder(1, 0, 0, 0, AppColors.BORDER_DEFAULT));
-        sp.getViewport().setBackground(AppColors.BG_PRIMARY);
-        sp.getVerticalScrollBar().setUnitIncrement(20);
-        AppUIManager.applySlimScrollBar(sp);
-        return sp;
+        listScrollPane = new JScrollPane(wrapper);
+        listScrollPane.setBorder(new MatteBorder(1, 0, 0, 0, AppColors.BORDER_DEFAULT));
+        listScrollPane.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+        listScrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED);
+        listScrollPane.getViewport().setBackground(AppColors.BG_PRIMARY);
+        listScrollPane.getVerticalScrollBar().setUnitIncrement(20);
+        AppUIManager.applySlimScrollBar(listScrollPane);
+        return listScrollPane;
     }
 
-    // ── 底部提示列 ────────────────────────────────────────────────────────────
     private JPanel buildHintBar() {
-        JPanel bar = new JPanel(new FlowLayout(FlowLayout.LEFT, 16, 6));
+        JPanel bar = new JPanel(new BorderLayout());
         bar.setBackground(AppColors.BG_SECONDARY);
         bar.setBorder(new MatteBorder(1, 0, 0, 0, AppColors.BORDER_DEFAULT));
 
         statusLabel.setFont(AppFonts.CAPTION);
         statusLabel.setForeground(AppColors.TEXT_TERTIARY);
-        bar.add(statusLabel);
+        statusLabel.setBorder(new EmptyBorder(6, 16, 6, 16));
 
+        JLabel hint = new JLabel("點擊公告即可開啟網頁；星號可加入收藏");
+        hint.setFont(AppFonts.CAPTION);
+        hint.setForeground(AppColors.TEXT_TERTIARY);
+        hint.setBorder(new EmptyBorder(6, 16, 6, 16));
+
+        bar.add(statusLabel, BorderLayout.WEST);
+        bar.add(hint, BorderLayout.EAST);
         return bar;
     }
 
-    // ── 建立每一列公告的 UI ─────────────────────────────────────────────────
     private JPanel buildNewsRow(NewsItem news) {
-        JPanel row = new JPanel(new BorderLayout(0, 0)) {
+        boolean starred = isStarred(news);
+        String category = classifyNews(news);
+
+        JPanel row = new JPanel(new BorderLayout(10, 0)) {
             @Override protected void paintComponent(Graphics g) {
                 super.paintComponent(g);
                 g.setColor(AppColors.BORDER_DEFAULT);
@@ -105,65 +177,268 @@ public class SchoolNewsPanel extends JPanel {
         };
         row.setOpaque(true);
         row.setBackground(AppColors.BG_PRIMARY);
-        row.setMinimumSize(new Dimension(0, 60));
+        row.setMinimumSize(new Dimension(0, 66));
         row.setMaximumSize(new Dimension(Integer.MAX_VALUE, Integer.MAX_VALUE));
-        row.setBorder(new EmptyBorder(12, 12, 12, 12));
+        row.setBorder(new EmptyBorder(10, 12, 10, 14));
         row.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        row.setToolTipText(news.getUrl());
 
-        // ── 標題 + URL ──
+        JButton starBtn = new JButton(starred ? "★" : "☆");
+        starBtn.setFont(new Font(AppFonts.BODY_MEDIUM.getFamily(), Font.PLAIN, 18));
+        starBtn.setForeground(starred ? AppColors.WARNING : AppColors.TEXT_TERTIARY);
+        starBtn.setBorder(new EmptyBorder(0, 4, 0, 4));
+        starBtn.setFocusPainted(false);
+        starBtn.setContentAreaFilled(false);
+        starBtn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        starBtn.setToolTipText(starred ? "取消星號" : "加入星號");
+        starBtn.addActionListener(e -> toggleStar(news));
+
         JPanel content = new JPanel();
         content.setLayout(new BoxLayout(content, BoxLayout.Y_AXIS));
         content.setOpaque(false);
 
-        JLabel titleLbl = new JLabel(news.getTitle());
-        titleLbl.setFont(AppFonts.BODY_SMALL);
-        titleLbl.setForeground(AppColors.TEXT_PRIMARY);
-        titleLbl.setAlignmentX(Component.LEFT_ALIGNMENT);
-        content.add(titleLbl);
+        JTextArea titleArea = new JTextArea(news.getTitle());
+        titleArea.setFont(AppFonts.BODY_SMALL);
+        titleArea.setForeground(AppColors.TEXT_PRIMARY);
+        titleArea.setEditable(false);
+        titleArea.setFocusable(false);
+        titleArea.setLineWrap(true);
+        titleArea.setWrapStyleWord(true);
+        titleArea.setOpaque(false);
+        titleArea.setBorder(null);
+        titleArea.setAlignmentX(Component.LEFT_ALIGNMENT);
+        content.add(titleArea);
 
-        content.add(Box.createRigidArea(new Dimension(0, 4)));
+        content.add(Box.createRigidArea(new Dimension(0, 5)));
 
-        JLabel urlLbl = new JLabel("<html><u>" + truncateUrl(news.getUrl()) + "</u></html>");
-        urlLbl.setFont(AppFonts.CAPTION);
-        urlLbl.setForeground(AppColors.ACCENT);
-        urlLbl.setAlignmentX(Component.LEFT_ALIGNMENT);
-        content.add(urlLbl);
+        JPanel metaRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 0));
+        metaRow.setOpaque(false);
+        metaRow.setAlignmentX(Component.LEFT_ALIGNMENT);
+        metaRow.add(categoryTag(category));
+        metaRow.add(metaLabel(news.getFetchedTime()));
+        content.add(metaRow);
 
-        content.add(Box.createRigidArea(new Dimension(0, 2)));
-
-        JLabel timeLbl = new JLabel(news.getFetchedTime());
-        timeLbl.setFont(AppFonts.CAPTION);
-        timeLbl.setForeground(AppColors.TEXT_TERTIARY);
-        timeLbl.setAlignmentX(Component.LEFT_ALIGNMENT);
-        content.add(timeLbl);
-
-        // ── 點擊開啟連結 ──
         MouseAdapter openLink = new MouseAdapter() {
             @Override public void mouseClicked(MouseEvent e) {
                 openUrl(news.getUrl());
             }
             @Override public void mouseEntered(MouseEvent e) {
                 row.setBackground(AppColors.ACCENT_LIGHT);
-                urlLbl.setForeground(AppColors.ACCENT);
             }
             @Override public void mouseExited(MouseEvent e) {
                 row.setBackground(AppColors.BG_PRIMARY);
-                urlLbl.setForeground(AppColors.ACCENT);
             }
         };
         row.addMouseListener(openLink);
         content.addMouseListener(openLink);
-        urlLbl.addMouseListener(openLink);
+        titleArea.addMouseListener(openLink);
 
+        row.add(starBtn, BorderLayout.WEST);
         row.add(content, BorderLayout.CENTER);
         return row;
     }
 
-    private static String truncateUrl(String url) {
-        if (url.length() > 70) {
-            return url.substring(0, 67) + "...";
+    private void onRefreshClick() {
+        statusLabel.setText("正在載入公告...");
+        refreshBtn.setEnabled(false);
+        crawler.fetchNewsAsync();
+    }
+
+    private void onCrawlComplete() {
+        SwingUtilities.invokeLater(() -> {
+            hasLoaded = true;
+            renderNewsList(true);
+            refreshBtn.setEnabled(true);
+        });
+    }
+
+    private void renderNewsList() {
+        renderNewsList(false);
+    }
+
+    private void renderNewsList(boolean scrollToTop) {
+        List<NewsItem> news = new ArrayList<>(crawler.getCachedNews());
+        listContainer.removeAll();
+
+        String query = searchField.getText().trim().toLowerCase();
+        String selectedCategory = (String) categoryCombo.getSelectedItem();
+        boolean starredOnly = starredOnlyCheck.isSelected();
+
+        if (CATEGORY_ALL.equals(selectedCategory) && !starredOnly) {
+            news.sort(Comparator
+                    .comparing((NewsItem item) -> !isStarred(item))
+                    .thenComparing(NewsItem::getFetchedTime, Comparator.reverseOrder()));
         }
-        return url;
+
+        int displayCount = 0;
+        for (NewsItem item : news) {
+            if (!isVisibleByKeyword(item, query)) continue;
+            if (!isVisibleByCategory(item, selectedCategory)) continue;
+            if (starredOnly && !isStarred(item)) continue;
+            listContainer.add(buildNewsRow(item));
+            displayCount++;
+        }
+
+        if (news.isEmpty()) {
+            addEmptyMessage("目前沒有公告資料，請重新整理。");
+        } else if (displayCount == 0) {
+            addEmptyMessage("沒有符合目前篩選條件的公告。");
+        }
+
+        statusLabel.setText("顯示 " + displayCount + " / " + news.size() + " 則公告");
+        listContainer.revalidate();
+        listContainer.repaint();
+        if (scrollToTop && listScrollPane != null) {
+            SwingUtilities.invokeLater(() ->
+                    listScrollPane.getVerticalScrollBar().setValue(0));
+        }
+    }
+
+    private boolean isVisibleByKeyword(NewsItem item, String query) {
+        if (query.isEmpty()) return true;
+        return item.getTitle().toLowerCase().contains(query)
+                || classifyNews(item).toLowerCase().contains(query)
+                || extractHost(item.getUrl()).toLowerCase().contains(query);
+    }
+
+    private boolean isVisibleByCategory(NewsItem item, String selectedCategory) {
+        if (selectedCategory == null || CATEGORY_ALL.equals(selectedCategory)) {
+            return true;
+        }
+        return selectedCategory.equals(classifyNews(item));
+    }
+
+    private void addEmptyMessage(String text) {
+        JLabel empty = new JLabel(text, SwingConstants.CENTER);
+        empty.setFont(AppFonts.BODY_SMALL);
+        empty.setForeground(AppColors.TEXT_TERTIARY);
+        empty.setAlignmentX(Component.CENTER_ALIGNMENT);
+        empty.setBorder(new EmptyBorder(40, 0, 0, 0));
+        listContainer.add(empty);
+    }
+
+    private boolean isStarred(NewsItem news) {
+        String url = news.getUrl();
+        return starredUrls.contains(url)
+                || (isDefaultStarred(news) && !unstarredDefaultUrls.contains(url));
+    }
+
+    private static boolean isDefaultStarred(NewsItem news) {
+        return news.getTitle().contains("行事曆");
+    }
+
+    private void toggleStar(NewsItem news) {
+        String url = news.getUrl();
+        boolean defaultStarred = isDefaultStarred(news);
+        if (isStarred(news)) {
+            starredUrls.remove(url);
+            if (defaultStarred) {
+                unstarredDefaultUrls.add(url);
+            }
+        } else {
+            if (defaultStarred) {
+                unstarredDefaultUrls.remove(url);
+            } else {
+                starredUrls.add(url);
+            }
+        }
+        saveStars();
+        saveDefaultUnstars();
+        renderNewsList();
+    }
+
+    private void loadStars() {
+        try {
+            if (!Files.exists(STAR_FILE)) return;
+            for (String line : Files.readAllLines(STAR_FILE, StandardCharsets.UTF_8)) {
+                String url = line.trim();
+                if (!url.isEmpty()) starredUrls.add(url);
+            }
+        } catch (IOException ignored) {
+            // Starred news is a convenience feature; the list still works if loading fails.
+        }
+    }
+
+    private void loadDefaultUnstars() {
+        try {
+            if (!Files.exists(DEFAULT_UNSTAR_FILE)) return;
+            for (String line : Files.readAllLines(DEFAULT_UNSTAR_FILE, StandardCharsets.UTF_8)) {
+                String url = line.trim();
+                if (!url.isEmpty()) unstarredDefaultUrls.add(url);
+            }
+        } catch (IOException ignored) {
+            // Default star exclusions are optional local preferences.
+        }
+    }
+
+    private void saveStars() {
+        try {
+            Files.createDirectories(STAR_FILE.getParent());
+            Files.write(STAR_FILE, starredUrls, StandardCharsets.UTF_8);
+        } catch (IOException ignored) {
+            // Keep the UI responsive even if local preference saving fails.
+        }
+    }
+
+    private void saveDefaultUnstars() {
+        try {
+            Files.createDirectories(DEFAULT_UNSTAR_FILE.getParent());
+            Files.write(DEFAULT_UNSTAR_FILE, unstarredDefaultUrls, StandardCharsets.UTF_8);
+        } catch (IOException ignored) {
+            // Keep the UI responsive even if local preference saving fails.
+        }
+    }
+
+    private static String classifyNews(NewsItem news) {
+        String title = news.getTitle();
+        if (containsAny(title, "獎學金", "補助", "助學", "學雜費", "急難")) return "獎學金/補助";
+        if (containsAny(title, "實習", "徵才", "職缺", "就業", "企業", "校徵")) return "實習/徵才";
+        if (containsAny(title, "競賽", "比賽", "黑客松", "活動", "演講", "講座", "研討會")) return "競賽/活動";
+        if (containsAny(title, "招生", "課程", "選課", "停課", "加退選", "考試", "抵免", "學分")) return "招生/課務";
+        if (containsAny(title, "系所", "資工", "資訊工程", "專題", "畢業")) return "系所公告";
+        if (containsAny(title, "學校", "校園", "教務", "學務", "總務", "圖書館")) return "校園公告";
+        return "其他";
+    }
+
+    private static boolean containsAny(String text, String... keywords) {
+        for (String keyword : keywords) {
+            if (text.contains(keyword)) return true;
+        }
+        return false;
+    }
+
+    private static JLabel categoryTag(String text) {
+        JLabel tag = new JLabel(text);
+        tag.setFont(AppFonts.CAPTION);
+        tag.setForeground(AppColors.ACCENT);
+        tag.setBackground(AppColors.ACCENT_LIGHT);
+        tag.setOpaque(true);
+        tag.setBorder(new EmptyBorder(2, 7, 2, 7));
+        return tag;
+    }
+
+    private static JLabel metaLabel(String text) {
+        JLabel label = new JLabel(text);
+        label.setFont(AppFonts.CAPTION);
+        label.setForeground(AppColors.TEXT_TERTIARY);
+        return label;
+    }
+
+    private static JLabel fieldLabel(String text) {
+        JLabel label = new JLabel(text);
+        label.setFont(AppFonts.BODY_SMALL);
+        label.setForeground(AppColors.TEXT_SECONDARY);
+        return label;
+    }
+
+    private static String extractHost(String url) {
+        try {
+            URI uri = new URI(url);
+            String host = uri.getHost();
+            return host != null ? host.replaceFirst("^www\\.", "") : url;
+        } catch (Exception e) {
+            return url;
+        }
     }
 
     private static void openUrl(String url) {
@@ -174,68 +449,7 @@ public class SchoolNewsPanel extends JPanel {
         } catch (Exception e) {
             JOptionPane.showMessageDialog(null,
                     "無法開啟連結: " + url,
-                    "錯誤", JOptionPane.ERROR_MESSAGE);
+                    "開啟失敗", JOptionPane.ERROR_MESSAGE);
         }
-    }
-
-    // ── 事件處理 ──────────────────────────────────────────────────────────────
-    private void onRefreshClick() {
-        statusLabel.setText("正在載入公告...");
-        refreshBtn.setEnabled(false);
-        crawler.fetchNewsAsync();
-    }
-
-    private void onCrawlComplete() {
-        SwingUtilities.invokeLater(() -> {
-            hasLoaded = true;
-            List<NewsItem> news = crawler.getCachedNews();
-
-            listContainer.removeAll();
-
-            if (news.isEmpty()) {
-                JLabel empty = new JLabel(
-                        "目前沒有公告或網路連線失敗，請稍後重試。",
-                        SwingConstants.CENTER);
-                empty.setFont(AppFonts.BODY_SMALL);
-                empty.setForeground(AppColors.TEXT_TERTIARY);
-                empty.setAlignmentX(Component.CENTER_ALIGNMENT);
-                empty.setBorder(new EmptyBorder(40, 0, 0, 0));
-                listContainer.add(empty);
-                statusLabel.setText("載入完成 — 0 筆消息");
-            } else {
-                int displayCount = 0;
-                for (NewsItem item : news) {
-                    if (isSchoolNewsIncluded(item.getTitle()) || isDeptNewsIncluded(item.getTitle())) {
-                        listContainer.add(buildNewsRow(item));
-                        displayCount++;
-                    }
-                }
-                if (displayCount == 0) {
-                    JLabel empty = new JLabel(
-                            "目前沒有符合條件的公告，請稍後重試。",
-                            SwingConstants.CENTER);
-                    empty.setFont(AppFonts.BODY_SMALL);
-                    empty.setForeground(AppColors.TEXT_TERTIARY);
-                    empty.setAlignmentX(Component.CENTER_ALIGNMENT);
-                    empty.setBorder(new EmptyBorder(40, 0, 0, 0));
-                    listContainer.add(empty);
-                }
-                statusLabel.setText("載入完成 — " + displayCount + " 筆公告");
-            }
-
-            listContainer.revalidate();
-            listContainer.repaint();
-            refreshBtn.setEnabled(true);
-        });
-    }
-
-    private boolean isSchoolNewsIncluded(String title) {
-        return title.contains("校園行事曆") ||
-               title.contains("大學程式能力檢定CPE");
-    }
-
-    private boolean isDeptNewsIncluded(String title) {
-        return title.startsWith("【最新消息】") ||
-               title.startsWith("【學業資訊】");
     }
 }
