@@ -253,7 +253,7 @@ public class CategoryTagBar extends JPanel {
             String val = addField.getText().trim();
             if (val.isEmpty()) { addField.requestFocus(); return; }
             if (categoryManager.getAllOptions().contains(val)) {
-                showDuplicateCategoryHint(dlg, val);
+                AppUIManager.showErrorDialog(dlg, "分類已存在", "已經有「" + val + "」這個分類。");
                 addField.requestFocus();
                 return;
             }

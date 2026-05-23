@@ -905,6 +905,15 @@ public class CalendarPanel extends JPanel {
                     .isAfter(LocalDateTime.now());
             LocalDateTime deadlineValue = LocalDateTime.of(chosenDate,
                     java.time.LocalTime.of(selectedTime[0], selectedTime[1]));
+            if (!isEdit && !deadlineValue.isAfter(LocalDateTime.now())) {
+                AppUIManager.showErrorDialog(dlg, "時間不合理", "截止時間必須晚於現在。");
+                return;
+            }
+            String reminderError = canSaveReminders ? reminderPanel.validateReminders(deadlineValue) : null;
+            if (reminderError != null) {
+                AppUIManager.showErrorDialog(dlg, "提醒時間不合理", reminderError);
+                return;
+            }
 
             // 取得分類
             String selectedCat = (String) catCombo.getSelectedItem();

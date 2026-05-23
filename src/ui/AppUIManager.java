@@ -82,6 +82,64 @@ public class AppUIManager {
         });
     }
 
+    public static void showInfoDialog(Window owner, String title, String message) {
+        showAlertDialog(owner, title, message, AppColors.ACCENT);
+    }
+
+    public static void showErrorDialog(Window owner, String title, String message) {
+        showAlertDialog(owner, title, message, AppColors.DANGER);
+    }
+
+    public static void showWarningDialog(Window owner, String title, String message) {
+        showInfoDialog(owner, title, message);
+    }
+
+    private static void showAlertDialog(Window owner, String title, String message, Color accent) {
+        JDialog dialog = new JDialog(owner, title, Dialog.ModalityType.APPLICATION_MODAL);
+        dialog.setUndecorated(true);
+        dialog.setBackground(new Color(0, 0, 0, 0));
+
+        JPanel root = new JPanel(new BorderLayout(0, 10));
+        root.setBackground(Color.WHITE);
+        root.setBorder(BorderFactory.createCompoundBorder(
+                new LineBorder(AppColors.BORDER_HOVER, 1, true),
+                new EmptyBorder(14, 16, 14, 16)));
+
+        JLabel titleLabel = new JLabel(title);
+        titleLabel.setFont(AppFonts.TITLE_SMALL);
+        titleLabel.setForeground(accent);
+
+        JLabel messageLabel = new JLabel(message);
+        messageLabel.setFont(AppFonts.BODY_SMALL);
+        messageLabel.setForeground(AppColors.TEXT_SECONDARY);
+
+        JButton okBtn = new JButton("確定");
+        okBtn.setFont(AppFonts.BODY_SMALL);
+        okBtn.setBackground(accent);
+        okBtn.setForeground(Color.WHITE);
+        okBtn.setBorder(new EmptyBorder(6, 18, 6, 18));
+        okBtn.setFocusPainted(false);
+        okBtn.setOpaque(true);
+        okBtn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        okBtn.addActionListener(e -> dialog.dispose());
+
+        JPanel btnRow = new JPanel(new FlowLayout(FlowLayout.RIGHT, 0, 0));
+        btnRow.setOpaque(false);
+        btnRow.add(okBtn);
+
+        root.add(titleLabel, BorderLayout.NORTH);
+        root.add(messageLabel, BorderLayout.CENTER);
+        root.add(btnRow, BorderLayout.SOUTH);
+
+        dialog.setContentPane(root);
+        dialog.pack();
+        dialog.setSize(Math.max(280, dialog.getPreferredSize().width), dialog.getPreferredSize().height);
+        applyRoundedWindowShape(dialog, 12);
+        dialog.setLocationRelativeTo(owner);
+        keepWindowInScreen(dialog);
+        dialog.setVisible(true);
+    }
+
     // ══════════════════════════════════════════════════════════
     // 1.  細線 ScrollBar
     // ══════════════════════════════════════════════════════════
@@ -532,12 +590,8 @@ public class AppUIManager {
         }
 
         private void refreshDisplay() {
-            // 時：24h 轉 12h 顯示
-            int display12 = selectedHour % 12;
-            if (display12 == 0) display12 = 12;
-
             boolean activeHour = (mode == Mode.HOUR);
-            hourLabel.setText(String.format("%02d", display12));
+            hourLabel.setText(String.format("%02d", selectedHour));
             minLabel .setText(String.format("%02d", selectedMinute));
 
             // 目前選擇的欄位用 accent 色強調，另一個用淡灰
@@ -591,13 +645,9 @@ public class AppUIManager {
                 if (deg < 0) deg += 360;
 
                 if (mode == Mode.HOUR) {
-                    int h12 = (int) Math.round(deg / 30) % 12;
-                    // 判斷 AM/PM 保持不變，只更新小時部分
+                    int slot = (int) Math.round(deg / 30) % 12;
                     boolean isPm = selectedHour >= 12;
-                    selectedHour = h12 + (isPm ? 12 : 0);
-                    if (selectedHour == 12 && !isPm) selectedHour = 0;
-                    if (selectedHour == 24)          selectedHour = 12;
-                    // 選完小時自動切到分鐘
+                    selectedHour = slot + (isPm ? 12 : 0);
                     mode = Mode.MINUTE;
                 } else {
                     selectedMinute = (int) Math.round(deg / 6) % 60;
@@ -637,23 +687,21 @@ public class AppUIManager {
 
             private void paintHours(Graphics2D g2, int cx, int cy, int R) {
                 double r = R * 0.82;
-                // 只畫 1-12，AM/PM 由上方按鈕控制
-                for (int h12 = 1; h12 <= 12; h12++) {
-                    double ang = Math.toRadians(h12 * 30 - 90);
+                boolean isPm = selectedHour >= 12;
+                for (int slot = 0; slot < 12; slot++) {
+                    double ang = Math.toRadians(slot * 30 - 90);
                     int nx = (int)(cx + r * Math.cos(ang));
                     int ny = (int)(cy + r * Math.sin(ang));
 
-                    // 計算目前 selectedHour 對應的 12h 值
-                    int sel12 = selectedHour % 12;
-                    if (sel12 == 0) sel12 = 12;
-                    boolean selected = (h12 == sel12);
+                    int hourValue = slot + (isPm ? 12 : 0);
+                    boolean selected = (hourValue == selectedHour);
 
                     if (selected) {
                         g2.setColor(AppColors.ACCENT);
                         g2.fillOval(nx - 15, ny - 15, 30, 30);
                     }
 
-                    String label = String.valueOf(h12);
+                    String label = String.format("%02d", hourValue);
                     g2.setFont(AppFonts.BODY_SMALL);
                     g2.setColor(selected ? Color.WHITE : AppColors.TEXT_PRIMARY);
                     FontMetrics fm = g2.getFontMetrics();
@@ -703,9 +751,7 @@ public class AppUIManager {
                 double handR = R * 0.82;
 
                 if (mode == Mode.HOUR) {
-                    int sel12 = selectedHour % 12;
-                    if (sel12 == 0) sel12 = 12;
-                    ang = Math.toRadians(sel12 * 30 - 90);
+                    ang = Math.toRadians((selectedHour % 12) * 30 - 90);
                 } else {
                     handR = R * 0.85;
                     ang   = Math.toRadians(selectedMinute * 6 - 90);

@@ -1174,42 +1174,7 @@ public class SchedulePanel extends JPanel {
 
     private void showMaxSlotHint(JDialog owner) {
         Window dialogOwner = owner != null ? owner : SwingUtilities.getWindowAncestor(this);
-        JDialog dialog = new JDialog(dialogOwner, "時段數量已達上限", Dialog.ModalityType.APPLICATION_MODAL);
-        dialog.setUndecorated(true);
-        dialog.setBackground(new Color(0, 0, 0, 0));
-
-        JPanel root = new JPanel(new BorderLayout(0, 10));
-        root.setBackground(Color.WHITE);
-        root.setBorder(BorderFactory.createCompoundBorder(
-                new LineBorder(AppColors.BORDER_HOVER, 1, true),
-                new EmptyBorder(14, 16, 14, 16)));
-
-        JLabel title = new JLabel("時段數量已達上限");
-        title.setFont(AppFonts.TITLE_SMALL);
-        title.setForeground(AppColors.ACCENT);
-
-        JLabel message = new JLabel("每門課最多 5 個時段。");
-        message.setFont(AppFonts.BODY_SMALL);
-        message.setForeground(AppColors.TEXT_SECONDARY);
-
-        JButton okBtn = dialogButton("確定", AppColors.ACCENT, Color.WHITE);
-        okBtn.addActionListener(e -> dialog.dispose());
-
-        JPanel btnRow = new JPanel(new FlowLayout(FlowLayout.RIGHT, 0, 0));
-        btnRow.setOpaque(false);
-        btnRow.add(okBtn);
-
-        root.add(title, BorderLayout.NORTH);
-        root.add(message, BorderLayout.CENTER);
-        root.add(btnRow, BorderLayout.SOUTH);
-
-        dialog.setContentPane(root);
-        dialog.pack();
-        dialog.setSize(Math.max(260, dialog.getPreferredSize().width), dialog.getPreferredSize().height);
-        AppUIManager.applyRoundedWindowShape(dialog, 12);
-        dialog.setLocationRelativeTo(dialogOwner);
-        AppUIManager.keepWindowInScreen(dialog);
-        dialog.setVisible(true);
+        AppUIManager.showInfoDialog(dialogOwner, "時段數量已達上限", "每門課最多 5 個時段。");
     }
 
     private void showImportResultDialog(String title, String message, String detail, Color accentColor) {
@@ -1658,20 +1623,12 @@ public class SchedulePanel extends JPanel {
             if (nameVal.isEmpty()) {
                 nameField.setBorder(BorderFactory.createCompoundBorder(
                     new LineBorder(AppColors.DANGER, 1, true), new EmptyBorder(5, 8, 5, 8)));
-                errorMsg.setText("課程名稱不可為空");
-                errorBanner.setVisible(true);
                 nameField.requestFocus();
-                dlg.pack();
-                dlg.setSize(dlg.getWidth(), Math.min(dlg.getPreferredSize().height,
-                    (int)(Toolkit.getDefaultToolkit().getScreenSize().height * DIALOG_MAX_HEIGHT_RATIO)));
+                AppUIManager.showErrorDialog(dlg, "課程設定錯誤", "課程名稱不可為空。");
                 return;
             }
             if (slotRows.isEmpty()) {
-                errorMsg.setText("請至少新增一個上課時段");
-                errorBanner.setVisible(true);
-                dlg.pack();
-                dlg.setSize(dlg.getWidth(), Math.min(dlg.getPreferredSize().height,
-                    (int)(Toolkit.getDefaultToolkit().getScreenSize().height * DIALOG_MAX_HEIGHT_RATIO)));
+                AppUIManager.showErrorDialog(dlg, "課程設定錯誤", "請至少新增一個上課時段。");
                 return;
             }
 
@@ -1679,22 +1636,17 @@ public class SchedulePanel extends JPanel {
                 SlotRow sr = slotRows.get(si);
                 if (sr.getEnd() < sr.getStart()) {
                     String dayN = new String[]{"一","二","三","四","五","六","日"}[sr.getDay()-1];
-                    errorMsg.setText("<html>時段 " + (si+1) + "（星期" + dayN + "）：結束節次（第" + sr.getEnd() + "節）不能早於開始節次（第" + sr.getStart() + "節）</html>");
-                    errorBanner.setVisible(true);
-                    dlg.pack();
-                    dlg.setSize(dlg.getWidth(), Math.min(dlg.getPreferredSize().height,
-                        (int)(Toolkit.getDefaultToolkit().getScreenSize().height * DIALOG_MAX_HEIGHT_RATIO)));
+                    AppUIManager.showErrorDialog(dlg, "課程設定錯誤",
+                            "<html>時段 " + (si+1) + "（星期" + dayN + "）：結束節次（第"
+                                    + sr.getEnd() + "節）不能早於開始節次（第"
+                                    + sr.getStart() + "節）。</html>");
                     return;
                 }
             }
 
             String conflictMsg = detectOverlap(slotRows, isEdit ? editCourse : null);
             if (conflictMsg != null) {
-                errorMsg.setText("<html>" + conflictMsg + "</html>");
-                errorBanner.setVisible(true);
-                dlg.pack();
-                dlg.setSize(dlg.getWidth(), Math.min(dlg.getPreferredSize().height,
-                    (int)(Toolkit.getDefaultToolkit().getScreenSize().height * DIALOG_MAX_HEIGHT_RATIO)));
+                AppUIManager.showErrorDialog(dlg, "課程時間衝突", "<html>" + conflictMsg + "</html>");
                 return;
             }
 

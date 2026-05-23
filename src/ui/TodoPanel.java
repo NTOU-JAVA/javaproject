@@ -145,14 +145,7 @@ public class TodoPanel extends JPanel {
         // 3. 監聽視窗縮放，動態調整內部公告列的寬度 (比照 TodoPanel 實現平滑自適應)
         sp.getViewport().addComponentListener(new ComponentAdapter() {
             @Override public void componentResized(ComponentEvent e) {
-                int vpW = sp.getViewport().getWidth();
-                if (vpW <= 0) return;
-                for (Component c : listContainer.getComponents()) {
-                    Dimension ps = c.getPreferredSize();
-                    c.setPreferredSize(new Dimension(vpW, ps.height));
-                }
-                listContainer.revalidate();
-                listContainer.repaint();
+                fitRowsToViewport(sp);
             }
         });
 
@@ -772,6 +765,16 @@ public class TodoPanel extends JPanel {
             LocalDateTime deadlineValue = reminder != null
                     ? LocalDateTime.of(selDate[0], java.time.LocalTime.of(selTime[0], selTime[1]))
                     : null;
+            if (!isEdit && deadlineValue != null && !deadlineValue.isAfter(LocalDateTime.now())) {
+                AppUIManager.showErrorDialog(dlg, "時間不合理", "截止時間必須晚於現在。");
+                return;
+            }
+            String reminderError = canSaveReminders
+                    ? reminderPanel.validateReminders(deadlineValue) : null;
+            if (reminderError != null) {
+                AppUIManager.showErrorDialog(dlg, "提醒時間不合理", reminderError);
+                return;
+            }
             // 取得分類
             String selectedCat = (String) catCombo.getSelectedItem();
             if ("（未分類）".equals(selectedCat)) selectedCat = "";
@@ -915,19 +918,24 @@ public class TodoPanel extends JPanel {
         listContainer.repaint();
 
         SwingUtilities.invokeLater(() -> {
-            Container vp = listContainer.getParent();
-            if (vp != null && vp.getParent() instanceof JViewport) {
-                int vpW = ((JViewport) vp.getParent()).getWidth();
-                if (vpW > 0) {
-                    for (Component c : listContainer.getComponents()) {
-                        Dimension ps = c.getPreferredSize();
-                        c.setPreferredSize(new Dimension(vpW, ps.height));
-                    }
-                    listContainer.revalidate();
-                    listContainer.repaint();
-                }
-            }
+            JScrollPane sp = (JScrollPane) SwingUtilities.getAncestorOfClass(JScrollPane.class, listContainer);
+            if (sp != null) fitRowsToViewport(sp);
         });
+    }
+
+    private void fitRowsToViewport(JScrollPane sp) {
+        int vpW = sp.getViewport().getWidth();
+        if (vpW <= 0) return;
+        for (Component c : listContainer.getComponents()) {
+            c.setPreferredSize(null);
+            c.setMaximumSize(null);
+            c.setSize(new Dimension(vpW, Short.MAX_VALUE));
+            Dimension ps = c.getPreferredSize();
+            c.setPreferredSize(new Dimension(vpW, ps.height));
+            c.setMaximumSize(new Dimension(Integer.MAX_VALUE, ps.height));
+        }
+        listContainer.revalidate();
+        listContainer.repaint();
     }
 
     private boolean clearOverdueReminders() {

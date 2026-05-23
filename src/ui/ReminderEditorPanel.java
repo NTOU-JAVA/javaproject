@@ -83,32 +83,30 @@ public class ReminderEditorPanel extends JPanel {
     public List<Reminder> getReminders(LocalDateTime deadline) {
         List<Reminder> reminders = new ArrayList<>();
         for (ReminderRow row : rows) {
-            Reminder reminder = normalizeReminder(row.toReminder(), deadline);
-            if (reminder != null) reminders.add(reminder);
+            reminders.add(row.toReminder());
         }
         return reminders;
     }
 
-    private Reminder normalizeReminder(Reminder reminder, LocalDateTime deadline) {
-        if (reminder == null || deadline == null || !deadline.isAfter(LocalDateTime.now())) {
-            return null;
+    public String validateReminders(LocalDateTime deadline) {
+        if (rows.isEmpty()) return null;
+        if (deadline == null || !deadline.isAfter(LocalDateTime.now())) {
+            return "截止時間必須晚於現在，才能設定提醒。";
         }
-        LocalDateTime target = reminder.resolve(deadline);
-        if (target != null && !target.isBefore(LocalDateTime.now()) && !target.isAfter(deadline)) {
-            return reminder;
-        }
-        Reminder fallback = defaultReminderFor(deadline);
-        LocalDateTime fallbackTarget = fallback.resolve(deadline);
-        if (fallbackTarget != null && !fallbackTarget.isBefore(LocalDateTime.now())
-                && !fallbackTarget.isAfter(deadline)) {
-            return fallback;
+        for (int i = 0; i < rows.size(); i++) {
+            Reminder reminder = rows.get(i).toReminder();
+            LocalDateTime target = reminder.resolve(deadline);
+            if (target == null) {
+                return "第 " + (i + 1) + " 個提醒時間無法解析。";
+            }
+            if (!target.isAfter(LocalDateTime.now())) {
+                return "第 " + (i + 1) + " 個提醒時間已經過去。";
+            }
+            if (target.isAfter(deadline)) {
+                return "第 " + (i + 1) + " 個提醒晚於截止時間。";
+            }
         }
         return null;
-    }
-
-    private Reminder defaultReminderFor(LocalDateTime deadline) {
-        long minutesUntilDeadline = java.time.Duration.between(LocalDateTime.now(), deadline).toMinutes();
-        return Reminder.beforeDeadline(minutesUntilDeadline >= 10 ? 10 : 0);
     }
 
     private void addReminderRow(Reminder reminder) {
@@ -160,42 +158,7 @@ public class ReminderEditorPanel extends JPanel {
 
     private void showMaxReminderHint() {
         Window dialogOwner = owner != null ? owner : SwingUtilities.getWindowAncestor(this);
-        JDialog dialog = new JDialog(dialogOwner, "提醒數量已滿", Dialog.ModalityType.APPLICATION_MODAL);
-        dialog.setUndecorated(true);
-        dialog.setBackground(new Color(0, 0, 0, 0));
-
-        JPanel root = new JPanel(new BorderLayout(0, 10));
-        root.setBackground(Color.WHITE);
-        root.setBorder(BorderFactory.createCompoundBorder(
-                new LineBorder(AppColors.BORDER_HOVER, 1, true),
-                new EmptyBorder(14, 16, 14, 16)));
-
-        JLabel title = new JLabel("提醒數量已滿");
-        title.setFont(AppFonts.TITLE_SMALL);
-        title.setForeground(AppColors.ACCENT);
-
-        JLabel message = new JLabel("每個項目最多 10 個提醒。");
-        message.setFont(AppFonts.BODY_SMALL);
-        message.setForeground(AppColors.TEXT_SECONDARY);
-
-        JButton okBtn = smallButton("確認", AppColors.ACCENT, Color.WHITE);
-        okBtn.addActionListener(e -> dialog.dispose());
-
-        JPanel btnRow = new JPanel(new FlowLayout(FlowLayout.RIGHT, 0, 0));
-        btnRow.setOpaque(false);
-        btnRow.add(okBtn);
-
-        root.add(title, BorderLayout.NORTH);
-        root.add(message, BorderLayout.CENTER);
-        root.add(btnRow, BorderLayout.SOUTH);
-
-        dialog.setContentPane(root);
-        dialog.pack();
-        dialog.setSize(Math.max(260, dialog.getPreferredSize().width), dialog.getPreferredSize().height);
-        AppUIManager.applyRoundedWindowShape(dialog, 12);
-        dialog.setLocationRelativeTo(dialogOwner);
-        AppUIManager.keepWindowInScreen(dialog);
-        dialog.setVisible(true);
+        AppUIManager.showInfoDialog(dialogOwner, "提醒數量已滿", "每個項目最多 10 個提醒。");
     }
 
     private JLabel smallLabel(String text) {
