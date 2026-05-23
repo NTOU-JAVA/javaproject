@@ -590,6 +590,7 @@ public class TodoPanel extends JPanel {
 
         final Runnable[] resizeDialog = new Runnable[1];
         final Runnable[] refreshReminderAvailability = new Runnable[1];
+        final JScrollPane[] contentScrollRef = new JScrollPane[1];
         JButton dateBtn     = pickerBtn(selDate[0].format(btnDateFmt));
         JButton timePickBtn = pickerBtn(String.format("%02d:%02d", selTime[0], selTime[1]));
 
@@ -715,6 +716,7 @@ public class TodoPanel extends JPanel {
         contentScroll.getViewport().setOpaque(false);
         contentScroll.getVerticalScrollBar().setUnitIncrement(16);
         AppUIManager.applySlimScrollBar(contentScroll);
+        contentScrollRef[0] = contentScroll;
 
         root.add(header,  BorderLayout.NORTH);
         root.add(contentScroll, BorderLayout.CENTER);
@@ -722,13 +724,22 @@ public class TodoPanel extends JPanel {
 
         dlg.pack();
         resizeDialog[0] = () -> {
-            dlg.pack();
+            int scrollValue = contentScrollRef[0] != null
+                    ? contentScrollRef[0].getVerticalScrollBar().getValue() : 0;
             int maxH = (int)(GraphicsEnvironment
                     .getLocalGraphicsEnvironment()
                     .getMaximumWindowBounds().height * DIALOG_MAX_HEIGHT_RATIO);
-            int width = Math.min(Math.max(DIALOG_MIN_WIDTH, dlg.getPreferredSize().width), DIALOG_MAX_WIDTH);
-            int height = Math.min(Math.max(DIALOG_MIN_HEIGHT, dlg.getPreferredSize().height), maxH);
-            dlg.setSize(width, height);
+            Dimension pref = dlg.getPreferredSize();
+            int width = Math.min(Math.max(DIALOG_MIN_WIDTH, pref.width), DIALOG_MAX_WIDTH);
+            int height = Math.min(Math.max(DIALOG_MIN_HEIGHT, pref.height), maxH);
+            Dimension target = new Dimension(width, height);
+            if (!target.equals(dlg.getSize())) {
+                dlg.setSize(target);
+            }
+            if (contentScrollRef[0] != null) {
+                SwingUtilities.invokeLater(() ->
+                        contentScrollRef[0].getVerticalScrollBar().setValue(scrollValue));
+            }
         };
         resizeDialog[0].run();
         AppUIManager.applyRoundedWindowShape(dlg, 16);

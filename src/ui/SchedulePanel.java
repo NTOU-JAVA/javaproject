@@ -56,6 +56,7 @@ public class SchedulePanel extends JPanel {
 
     private static final int ROW_HEIGHT = 64;
     private static final double DIALOG_MAX_HEIGHT_RATIO = 0.78;
+    private static final int MAX_COURSE_SLOTS = 5;
 
     private final List<Schedule> schedules;
     private final Runnable       saveCallback;
@@ -1169,6 +1170,45 @@ public class SchedulePanel extends JPanel {
         return button;
     }
 
+    private void showMaxSlotHint(JDialog owner) {
+        Window dialogOwner = owner != null ? owner : SwingUtilities.getWindowAncestor(this);
+        JDialog dialog = new JDialog(dialogOwner, "時段數量已達上限", Dialog.ModalityType.APPLICATION_MODAL);
+        dialog.setUndecorated(true);
+        dialog.setBackground(new Color(0, 0, 0, 0));
+
+        JPanel root = new JPanel(new BorderLayout(0, 10));
+        root.setBackground(Color.WHITE);
+        root.setBorder(BorderFactory.createCompoundBorder(
+                new LineBorder(AppColors.BORDER_HOVER, 1, true),
+                new EmptyBorder(14, 16, 14, 16)));
+
+        JLabel title = new JLabel("時段數量已達上限");
+        title.setFont(AppFonts.TITLE_SMALL);
+        title.setForeground(AppColors.ACCENT);
+
+        JLabel message = new JLabel("每門課最多 5 個時段。");
+        message.setFont(AppFonts.BODY_SMALL);
+        message.setForeground(AppColors.TEXT_SECONDARY);
+
+        JButton okBtn = dialogButton("確定", AppColors.ACCENT, Color.WHITE);
+        okBtn.addActionListener(e -> dialog.dispose());
+
+        JPanel btnRow = new JPanel(new FlowLayout(FlowLayout.RIGHT, 0, 0));
+        btnRow.setOpaque(false);
+        btnRow.add(okBtn);
+
+        root.add(title, BorderLayout.NORTH);
+        root.add(message, BorderLayout.CENTER);
+        root.add(btnRow, BorderLayout.SOUTH);
+
+        dialog.setContentPane(root);
+        dialog.pack();
+        dialog.setSize(Math.max(260, dialog.getPreferredSize().width), dialog.getPreferredSize().height);
+        AppUIManager.applyRoundedWindowShape(dialog, 12);
+        dialog.setLocationRelativeTo(dialogOwner);
+        dialog.setVisible(true);
+    }
+
     private void showImportResultDialog(String title, String message, String detail, Color accentColor) {
         Window owner = SwingUtilities.getWindowAncestor(this);
         JDialog dlg = new JDialog(owner, "", Dialog.ModalityType.APPLICATION_MODAL);
@@ -1435,7 +1475,7 @@ public class SchedulePanel extends JPanel {
             if (schedStr != null && !schedStr.isEmpty()) {
                 for (String slot : schedStr.split(";")) {
                     int[] parsed = parseSlotString(slot.trim());
-                    if (parsed != null) initSlots.add(parsed);
+                    if (parsed != null && initSlots.size() < MAX_COURSE_SLOTS) initSlots.add(parsed);
                 }
             }
             if (initSlots.isEmpty()) {
@@ -1454,9 +1494,12 @@ public class SchedulePanel extends JPanel {
         List<SlotRow> slotRows = new ArrayList<>();
 
         final int[] baseWidth = { 0 };
+        final JScrollPane[] contentScrollRef = new JScrollPane[1];
 
         Runnable rebuildSlots = new Runnable() {
             @Override public void run() {
+                int scrollValue = contentScrollRef[0] != null
+                        ? contentScrollRef[0].getVerticalScrollBar().getValue() : 0;
                 slotsContainer.removeAll();
                 boolean hasRemoveBtn = slotRows.size() > 1;
                 for (int i = 0; i < slotRows.size(); i++) {
@@ -1467,11 +1510,11 @@ public class SchedulePanel extends JPanel {
                     rowPanel.setMaximumSize(new Dimension(Integer.MAX_VALUE, 36));
                     rowPanel.add(sr.panel, BorderLayout.CENTER);
                     if (hasRemoveBtn) {
-                        JButton removeBtn = new JButton("—");
+                        JButton removeBtn = new JButton("-");
                         removeBtn.setFont(AppFonts.CAPTION);
                         removeBtn.setForeground(AppColors.DANGER);
                         removeBtn.setBackground(AppColors.DANGER_LIGHT);
-                        removeBtn.setBorder(new EmptyBorder(3, 6, 3, 6));
+                        removeBtn.setBorder(new EmptyBorder(5, 10, 5, 10));
                         removeBtn.setFocusPainted(false);
                         removeBtn.setOpaque(true);
                         removeBtn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
@@ -1496,6 +1539,10 @@ public class SchedulePanel extends JPanel {
                     int w = Math.max(dlg.getWidth(), baseWidth[0]);
                     dlg.setSize(w, Math.min(dlg.getPreferredSize().height, maxH));
                 }
+                if (contentScrollRef[0] != null) {
+                    SwingUtilities.invokeLater(() ->
+                            contentScrollRef[0].getVerticalScrollBar().setValue(scrollValue));
+                }
             }
         };
 
@@ -1513,6 +1560,10 @@ public class SchedulePanel extends JPanel {
         addSlotBtn.setOpaque(true);
         addSlotBtn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
         addSlotBtn.addActionListener(e -> {
+            if (slotRows.size() >= MAX_COURSE_SLOTS) {
+                showMaxSlotHint(dlg);
+                return;
+            }
             slotRows.add(new SlotRow(1, 1, 2));
             rebuildSlots.run();
         });
@@ -1595,6 +1646,7 @@ public class SchedulePanel extends JPanel {
         contentScroll.getViewport().setOpaque(false);
         contentScroll.getVerticalScrollBar().setUnitIncrement(16);
         AppUIManager.applySlimScrollBar(contentScroll);
+        contentScrollRef[0] = contentScroll;
 
         Runnable onOk = () -> {
             String nameVal = nameField.getText().trim();
