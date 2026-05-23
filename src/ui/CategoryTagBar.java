@@ -21,6 +21,7 @@ public class CategoryTagBar extends JPanel {
     private String selectedCategory = CategoryManager.ALL;
 
     private final JPanel tagRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 4));
+    private JScrollPane tagScroll;
 
     public CategoryTagBar(CategoryManager categoryManager, Consumer<String> onFilterChanged) {
         this.categoryManager  = categoryManager;
@@ -66,7 +67,22 @@ public class CategoryTagBar extends JPanel {
         manageBtnWrapper.setBorder(new EmptyBorder(0, 0, 0, 10));
         manageBtnWrapper.add(manageBtn);
 
-        add(tagRow,          BorderLayout.CENTER);
+        tagScroll = new JScrollPane(tagRow,
+                JScrollPane.VERTICAL_SCROLLBAR_NEVER,
+                JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED);
+        tagScroll.setBorder(null);
+        tagScroll.setOpaque(false);
+        tagScroll.getViewport().setOpaque(false);
+        tagScroll.getHorizontalScrollBar().setUnitIncrement(24);
+        tagScroll.setWheelScrollingEnabled(false);
+        AppUIManager.applySlimScrollBar(tagScroll);
+        tagScroll.addMouseWheelListener(e -> {
+            JScrollBar bar = tagScroll.getHorizontalScrollBar();
+            int next = bar.getValue() + e.getUnitsToScroll() * bar.getUnitIncrement();
+            bar.setValue(Math.max(bar.getMinimum(), Math.min(next, bar.getMaximum())));
+        });
+
+        add(tagScroll,       BorderLayout.CENTER);
         add(manageBtnWrapper, BorderLayout.EAST);
 
         categoryManager.addListener(this::rebuildTags);
@@ -371,8 +387,8 @@ public class CategoryTagBar extends JPanel {
 
             JPanel btnArea = new JPanel(new FlowLayout(FlowLayout.RIGHT, 4, 8));
             btnArea.setOpaque(false);
-            btnArea.add(renameBtn);
             btnArea.add(delBtn);
+            btnArea.add(renameBtn);
             btnArea.add(cancelDelBtn);
             btnArea.add(confirmDelBtn);
             row.add(btnArea, BorderLayout.EAST);
