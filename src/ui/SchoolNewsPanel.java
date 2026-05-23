@@ -27,9 +27,9 @@ public class SchoolNewsPanel extends JPanel {
     private static final Path STAR_FILE = Path.of("data", "news-stars.txt");
     private static final Path DEFAULT_UNSTAR_FILE = Path.of("data", "news-default-unstarred.txt");
     private static final String CATEGORY_ALL = "全部";
+    // 請將原本的選項替換為這四個你需要的分類
     private static final String[] CATEGORY_OPTIONS = {
-        CATEGORY_ALL, "系所公告", "校園公告", "招生/課務",
-        "競賽/活動", "獎學金/補助", "實習/徵才", "其他"
+        CATEGORY_ALL, "行事曆", "CPE", "學業資訊", "最新消息"
     };
 
     private final SchoolNewsCrawler crawler;
@@ -272,6 +272,9 @@ public class SchoolNewsPanel extends JPanel {
 
         int displayCount = 0;
         for (NewsItem item : news) {
+            String category = classifyNews(item);
+            if (category == null) continue; // 【新增】如果不是我們要的四種分類，直接跳過不顯示
+
             if (!isVisibleByKeyword(item, query)) continue;
             if (!isVisibleByCategory(item, selectedCategory)) continue;
             if (starredOnly && !isStarred(item)) continue;
@@ -296,8 +299,11 @@ public class SchoolNewsPanel extends JPanel {
 
     private boolean isVisibleByKeyword(NewsItem item, String query) {
         if (query.isEmpty()) return true;
+        String category = classifyNews(item);
+        String categoryStr = (category != null) ? category : ""; // 【修改】防呆處理
+        
         return item.getTitle().toLowerCase().contains(query)
-                || classifyNews(item).toLowerCase().contains(query)
+                || categoryStr.toLowerCase().contains(query)
                 || extractHost(item.getUrl()).toLowerCase().contains(query);
     }
 
@@ -391,13 +397,25 @@ public class SchoolNewsPanel extends JPanel {
 
     private static String classifyNews(NewsItem news) {
         String title = news.getTitle();
-        if (containsAny(title, "獎學金", "補助", "助學", "學雜費", "急難")) return "獎學金/補助";
-        if (containsAny(title, "實習", "徵才", "職缺", "就業", "企業", "校徵")) return "實習/徵才";
-        if (containsAny(title, "競賽", "比賽", "黑客松", "活動", "演講", "講座", "研討會")) return "競賽/活動";
-        if (containsAny(title, "招生", "課程", "選課", "停課", "加退選", "考試", "抵免", "學分")) return "招生/課務";
-        if (containsAny(title, "系所", "資工", "資訊工程", "專題", "畢業")) return "系所公告";
-        if (containsAny(title, "學校", "校園", "教務", "學務", "總務", "圖書館")) return "校園公告";
-        return "其他";
+        // 1. 行事曆
+        if (title.contains("行事曆")) {
+            return "行事曆";
+        }
+        // 2. CPE (大學程式能力檢定)
+        if (containsAny(title.toUpperCase(), "CPE", "大學程式能力檢定")) {
+            return "CPE";
+        }
+        // 3. 學業/修業資訊 (畢業門檻、選課修業規定、學分等)
+        if (containsAny(title, "修業", "學業", "修課", "畢業門檻", "選課", "學分", "規定")) {
+            return "學業資訊";
+        }
+        // 4. 最新消息 (通常包含重要通知、最新重要公告等)
+        if (containsAny(title, "最新消息", "重要公告", "重要通知")) {
+            return "最新消息";
+        }
+    
+        // 如果都不符合，回傳 null 代表是不需要的訊息
+        return null;
     }
 
     private static boolean containsAny(String text, String... keywords) {
