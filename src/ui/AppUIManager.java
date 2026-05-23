@@ -36,6 +36,52 @@ public class AppUIManager {
         updateShape.run();
     }
 
+    public static void keepWindowInScreen(Window window) {
+        if (window == null) return;
+        Rectangle bounds = GraphicsEnvironment
+                .getLocalGraphicsEnvironment()
+                .getMaximumWindowBounds();
+        int padding = 8;
+        int bottomPadding = 16;
+        int x = window.getX();
+        int y = window.getY();
+
+        if (x < bounds.x + padding) x = bounds.x + padding;
+        if (y < bounds.y + padding) y = bounds.y + padding;
+        if (x + window.getWidth() > bounds.x + bounds.width - padding) {
+            x = bounds.x + bounds.width - padding - window.getWidth();
+        }
+        if (y + window.getHeight() > bounds.y + bounds.height - bottomPadding) {
+            y = bounds.y + bounds.height - bottomPadding - window.getHeight();
+        }
+        window.setLocation(Math.max(bounds.x + padding, x), Math.max(bounds.y + padding, y));
+    }
+
+    public static void enableWindowDrag(Window window, JComponent dragHandle) {
+        if (window == null || dragHandle == null) return;
+        final Point[] dragOffset = new Point[1];
+        dragHandle.setCursor(Cursor.getPredefinedCursor(Cursor.MOVE_CURSOR));
+        dragHandle.addMouseListener(new MouseAdapter() {
+            @Override public void mousePressed(MouseEvent e) {
+                if (!SwingUtilities.isLeftMouseButton(e)) return;
+                Point screen = e.getLocationOnScreen();
+                dragOffset[0] = new Point(screen.x - window.getX(), screen.y - window.getY());
+            }
+
+            @Override public void mouseReleased(MouseEvent e) {
+                dragOffset[0] = null;
+                keepWindowInScreen(window);
+            }
+        });
+        dragHandle.addMouseMotionListener(new MouseMotionAdapter() {
+            @Override public void mouseDragged(MouseEvent e) {
+                if (dragOffset[0] == null) return;
+                Point screen = e.getLocationOnScreen();
+                window.setLocation(screen.x - dragOffset[0].x, screen.y - dragOffset[0].y);
+            }
+        });
+    }
+
     // ══════════════════════════════════════════════════════════
     // 1.  細線 ScrollBar
     // ══════════════════════════════════════════════════════════

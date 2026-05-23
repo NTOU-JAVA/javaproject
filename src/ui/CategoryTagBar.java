@@ -204,6 +204,7 @@ public class CategoryTagBar extends JPanel {
         closeBtn.addActionListener(e -> dlg.dispose());
         header.add(title,    BorderLayout.CENTER);
         header.add(closeBtn, BorderLayout.EAST);
+        AppUIManager.enableWindowDrag(dlg, header);
 
         // 分類清單
         JPanel listPanel = new JPanel();
@@ -219,8 +220,7 @@ public class CategoryTagBar extends JPanel {
                 }
                 listPanel.revalidate();
                 listPanel.repaint();
-                dlg.pack();
-                dlg.setSize(340 + 7, dlg.getPreferredSize().height);
+                AppUIManager.keepWindowInScreen(dlg);
             }
         };
         refreshList.run();
@@ -252,6 +252,11 @@ public class CategoryTagBar extends JPanel {
         Runnable doAdd = () -> {
             String val = addField.getText().trim();
             if (val.isEmpty()) { addField.requestFocus(); return; }
+            if (categoryManager.getAllOptions().contains(val)) {
+                showDuplicateCategoryHint(dlg, val);
+                addField.requestFocus();
+                return;
+            }
             if (!categoryManager.addCategory(val)) {
                 addField.setBorder(BorderFactory.createCompoundBorder(
                     new LineBorder(AppColors.DANGER, 1, true),
@@ -285,7 +290,55 @@ public class CategoryTagBar extends JPanel {
         dlg.setSize(340 + 7, dlg.getPreferredSize().height);
         AppUIManager.applyRoundedWindowShape(dlg, 16);
         dlg.setLocationRelativeTo(owner);
+        AppUIManager.keepWindowInScreen(dlg);
         dlg.setVisible(true);
+    }
+
+    private void showDuplicateCategoryHint(JDialog owner, String categoryName) {
+        Window dialogOwner = owner != null ? owner : SwingUtilities.getWindowAncestor(this);
+        JDialog dialog = new JDialog(dialogOwner, "分類已存在", Dialog.ModalityType.APPLICATION_MODAL);
+        dialog.setUndecorated(true);
+        dialog.setBackground(new Color(0, 0, 0, 0));
+
+        JPanel root = new JPanel(new BorderLayout(0, 10));
+        root.setBackground(Color.WHITE);
+        root.setBorder(BorderFactory.createCompoundBorder(
+                new LineBorder(AppColors.BORDER_HOVER, 1, true),
+                new EmptyBorder(14, 16, 14, 16)));
+
+        JLabel title = new JLabel("分類已存在");
+        title.setFont(AppFonts.TITLE_SMALL);
+        title.setForeground(AppColors.ACCENT);
+
+        JLabel message = new JLabel("已經有「" + categoryName + "」這個分類。");
+        message.setFont(AppFonts.BODY_SMALL);
+        message.setForeground(AppColors.TEXT_SECONDARY);
+
+        JButton okBtn = new JButton("確定");
+        okBtn.setFont(AppFonts.BODY_SMALL);
+        okBtn.setBackground(AppColors.ACCENT);
+        okBtn.setForeground(Color.WHITE);
+        okBtn.setBorder(new EmptyBorder(6, 18, 6, 18));
+        okBtn.setFocusPainted(false);
+        okBtn.setOpaque(true);
+        okBtn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        okBtn.addActionListener(e -> dialog.dispose());
+
+        JPanel btnRow = new JPanel(new FlowLayout(FlowLayout.RIGHT, 0, 0));
+        btnRow.setOpaque(false);
+        btnRow.add(okBtn);
+
+        root.add(title, BorderLayout.NORTH);
+        root.add(message, BorderLayout.CENTER);
+        root.add(btnRow, BorderLayout.SOUTH);
+
+        dialog.setContentPane(root);
+        dialog.pack();
+        dialog.setSize(Math.max(260, dialog.getPreferredSize().width), dialog.getPreferredSize().height);
+        AppUIManager.applyRoundedWindowShape(dialog, 12);
+        dialog.setLocationRelativeTo(dialogOwner);
+        AppUIManager.keepWindowInScreen(dialog);
+        dialog.setVisible(true);
     }
 
     /** 管理 Dialog 裡每一列分類 */
@@ -451,6 +504,7 @@ public class CategoryTagBar extends JPanel {
         xBtn.addActionListener(e -> renameDlg.dispose());
         header.add(titleLbl, BorderLayout.CENTER);
         header.add(xBtn,     BorderLayout.EAST);
+        AppUIManager.enableWindowDrag(renameDlg, header);
 
         // Content：原名稱（唯讀）+ 新名稱（可輸入）
         JPanel content = new JPanel(new GridBagLayout());
@@ -545,6 +599,7 @@ public class CategoryTagBar extends JPanel {
         renameDlg.setSize(300 + 7, renameDlg.getPreferredSize().height);
         AppUIManager.applyRoundedWindowShape(renameDlg, 16);
         renameDlg.setLocationRelativeTo(parentDlg);
+        AppUIManager.keepWindowInScreen(renameDlg);
         renameDlg.setVisible(true);
     }
 

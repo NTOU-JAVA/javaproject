@@ -427,6 +427,7 @@ public class SchedulePanel extends JPanel {
         dlg.setSize(Math.max(760, dlg.getWidth()), Math.max(500, dlg.getHeight()));
         AppUIManager.applyRoundedWindowShape(dlg, 16);
         dlg.setLocationRelativeTo(this);
+        AppUIManager.keepWindowInScreen(dlg);
         dlg.setVisible(true);
         return selected[0];
     }
@@ -1121,6 +1122,7 @@ public class SchedulePanel extends JPanel {
         xBtn.addActionListener(e -> dlg.dispose());
         header.add(titleLbl, BorderLayout.CENTER);
         header.add(xBtn,     BorderLayout.EAST);
+        AppUIManager.enableWindowDrag(dlg, header);
         root.add(header, BorderLayout.NORTH);
 
         return root;
@@ -1206,6 +1208,7 @@ public class SchedulePanel extends JPanel {
         dialog.setSize(Math.max(260, dialog.getPreferredSize().width), dialog.getPreferredSize().height);
         AppUIManager.applyRoundedWindowShape(dialog, 12);
         dialog.setLocationRelativeTo(dialogOwner);
+        AppUIManager.keepWindowInScreen(dialog);
         dialog.setVisible(true);
     }
 
@@ -1301,6 +1304,7 @@ public class SchedulePanel extends JPanel {
         dlg.setSize(Math.max(380, dlg.getWidth()), dlg.getHeight());
         AppUIManager.applyRoundedWindowShape(dlg, 16);
         dlg.setLocationRelativeTo(this);
+        AppUIManager.keepWindowInScreen(dlg);
         dlg.setVisible(true);
     }
 
@@ -1423,6 +1427,7 @@ public class SchedulePanel extends JPanel {
         dlg.setSize(320 + 7, dlg.getHeight());
         AppUIManager.applyRoundedWindowShape(dlg, 16);
         dlg.setLocationRelativeTo(this);
+        AppUIManager.keepWindowInScreen(dlg);
         dlg.setVisible(true);
     }
 
@@ -1748,6 +1753,7 @@ public class SchedulePanel extends JPanel {
         dlg.setSize(dlg.getWidth(), Math.min(dlg.getHeight(), maxH));
         AppUIManager.applyRoundedWindowShape(dlg, 16);
         dlg.setLocationRelativeTo(null);
+        AppUIManager.keepWindowInScreen(dlg);
         dlg.setVisible(true);
     }
 

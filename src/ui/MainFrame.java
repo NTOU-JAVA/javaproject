@@ -397,6 +397,7 @@ public class MainFrame extends JFrame {
         dlg.setSize(Math.max(380, dlg.getWidth()), dlg.getHeight());
         AppUIManager.applyRoundedWindowShape(dlg, 16);
         dlg.setLocationRelativeTo(this);
+        AppUIManager.keepWindowInScreen(dlg);
         dlg.setVisible(true);
     }
 
@@ -414,6 +415,7 @@ public class MainFrame extends JFrame {
         dlg.setSize(Math.max(380, dlg.getWidth()), dlg.getHeight());
         AppUIManager.applyRoundedWindowShape(dlg, 16);
         dlg.setLocationRelativeTo(this);
+        AppUIManager.keepWindowInScreen(dlg);
         dlg.setVisible(true);
         return confirmed[0];
     }
@@ -471,6 +473,7 @@ public class MainFrame extends JFrame {
 
         header.add(titleLbl, BorderLayout.CENTER);
         header.add(closeBtn, BorderLayout.EAST);
+        AppUIManager.enableWindowDrag(dlg, header);
         root.add(header, BorderLayout.NORTH);
         return root;
     }

@@ -675,6 +675,7 @@ public class CalendarPanel extends JPanel {
         closeBtn.addActionListener(e -> dlg.dispose());
         header.add(headerTitle, BorderLayout.CENTER);
         header.add(closeBtn,    BorderLayout.EAST);
+        AppUIManager.enableWindowDrag(dlg, header);
 
         LocalDate initDate = isEdit
                 ? (editTask.hasDeadline() && !editTask.getDate().isEmpty()
@@ -873,6 +874,7 @@ public class CalendarPanel extends JPanel {
             if (!target.equals(dlg.getSize())) {
                 dlg.setSize(target);
             }
+            AppUIManager.keepWindowInScreen(dlg);
             if (contentScrollRef[0] != null) {
                 SwingUtilities.invokeLater(() ->
                         contentScrollRef[0].getVerticalScrollBar().setValue(scrollValue));
@@ -881,6 +883,7 @@ public class CalendarPanel extends JPanel {
         resizeDialog[0].run();
         AppUIManager.applyRoundedWindowShape(dlg, 16);
         dlg.setLocationRelativeTo(this);
+        AppUIManager.keepWindowInScreen(dlg);
 
         cancelBtn.addActionListener(e -> dlg.dispose());
         dlg.getRootPane().setDefaultButton(okBtn);

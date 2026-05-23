@@ -194,6 +194,7 @@ public class ReminderEditorPanel extends JPanel {
         dialog.setSize(Math.max(260, dialog.getPreferredSize().width), dialog.getPreferredSize().height);
         AppUIManager.applyRoundedWindowShape(dialog, 12);
         dialog.setLocationRelativeTo(dialogOwner);
+        AppUIManager.keepWindowInScreen(dialog);
         dialog.setVisible(true);
     }
 

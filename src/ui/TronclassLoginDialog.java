@@ -63,6 +63,7 @@ public class TronclassLoginDialog extends JDialog {
         setSize(500, getPreferredSize().height);
         AppUIManager.applyRoundedWindowShape(this, 16);
         setLocationRelativeTo(owner);
+        AppUIManager.keepWindowInScreen(this);
     }
 
     // ── UI 建構 ──────────────────────────────────────────────────────────────
@@ -107,6 +108,7 @@ public class TronclassLoginDialog extends JDialog {
         closeBtn.addActionListener(e -> dispose());
         header.add(title,    BorderLayout.CENTER);
         header.add(closeBtn, BorderLayout.EAST);
+        AppUIManager.enableWindowDrag(this, header);
 
         // ── 主內容 ──
         JPanel content = new JPanel(new GridBagLayout());

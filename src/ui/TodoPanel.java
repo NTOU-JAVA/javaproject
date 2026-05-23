@@ -531,6 +531,7 @@ public class TodoPanel extends JPanel {
         closeBtn.addActionListener(e -> dlg.dispose());
         header.add(headerTitle, BorderLayout.CENTER);
         header.add(closeBtn,    BorderLayout.EAST);
+        enableDialogDrag(dlg, header);
 
         JTextField titleField = new JTextField(isEdit ? editItem.getTitle() : "");
         titleField.setFont(AppFonts.BODY_MEDIUM);
@@ -736,6 +737,7 @@ public class TodoPanel extends JPanel {
             if (!target.equals(dlg.getSize())) {
                 dlg.setSize(target);
             }
+            liftDialogIntoView(dlg);
             if (contentScrollRef[0] != null) {
                 SwingUtilities.invokeLater(() ->
                         contentScrollRef[0].getVerticalScrollBar().setValue(scrollValue));
@@ -744,6 +746,7 @@ public class TodoPanel extends JPanel {
         resizeDialog[0].run();
         AppUIManager.applyRoundedWindowShape(dlg, 16);
         dlg.setLocationRelativeTo(this);
+        liftDialogIntoView(dlg);
 
         cancelBtn.addActionListener(e -> dlg.dispose());
         dlg.getRootPane().setDefaultButton(okBtn);
@@ -805,11 +808,46 @@ public class TodoPanel extends JPanel {
                 .getMaximumWindowBounds();
         int topPadding = 8;
         int bottomPadding = 16;
-        int y = bounds.y + topPadding;
+        int x = dlg.getX();
+        int y = dlg.getY();
+        if (y < bounds.y + topPadding) {
+            y = bounds.y + topPadding;
+        }
         if (y + dlg.getHeight() > bounds.y + bounds.height - bottomPadding) {
             y = bounds.y + bounds.height - bottomPadding - dlg.getHeight();
         }
-        dlg.setLocation(dlg.getX(), Math.max(bounds.y + topPadding, y));
+        if (x < bounds.x + topPadding) {
+            x = bounds.x + topPadding;
+        }
+        if (x + dlg.getWidth() > bounds.x + bounds.width - topPadding) {
+            x = bounds.x + bounds.width - topPadding - dlg.getWidth();
+        }
+        dlg.setLocation(Math.max(bounds.x + topPadding, x),
+                Math.max(bounds.y + topPadding, y));
+    }
+
+    private static void enableDialogDrag(JDialog dlg, JComponent dragHandle) {
+        final Point[] dragOffset = new Point[1];
+        dragHandle.setCursor(Cursor.getPredefinedCursor(Cursor.MOVE_CURSOR));
+        dragHandle.addMouseListener(new MouseAdapter() {
+            @Override public void mousePressed(MouseEvent e) {
+                if (!SwingUtilities.isLeftMouseButton(e)) return;
+                Point screen = e.getLocationOnScreen();
+                dragOffset[0] = new Point(screen.x - dlg.getX(), screen.y - dlg.getY());
+            }
+
+            @Override public void mouseReleased(MouseEvent e) {
+                dragOffset[0] = null;
+                liftDialogIntoView(dlg);
+            }
+        });
+        dragHandle.addMouseMotionListener(new MouseMotionAdapter() {
+            @Override public void mouseDragged(MouseEvent e) {
+                if (dragOffset[0] == null) return;
+                Point screen = e.getLocationOnScreen();
+                dlg.setLocation(screen.x - dragOffset[0].x, screen.y - dragOffset[0].y);
+            }
+        });
     }
 
     private static LocalDateTime nextFullHour() {
