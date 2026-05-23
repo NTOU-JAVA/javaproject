@@ -118,6 +118,7 @@ public class TodoPanel extends JPanel {
 
     // ── 清單區 ──────────────────────────────────────────────────────────────
     private JScrollPane buildListArea() {
+        listContainer.setLayout(new BoxLayout(listContainer, BoxLayout.Y_AXIS));
         listContainer.setBackground(AppColors.BG_PRIMARY);
 
         JPanel wrapper = new JPanel(new BorderLayout());
@@ -126,10 +127,15 @@ public class TodoPanel extends JPanel {
 
         JScrollPane sp = new JScrollPane(wrapper);
         sp.setBorder(new MatteBorder(1, 0, 0, 0, AppColors.BORDER_DEFAULT));
+        // 1. 強制關閉水平滾動條，與 TodoPanel 保持一致
         sp.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
         sp.getViewport().setBackground(AppColors.BG_PRIMARY);
+        sp.getVerticalScrollBar().setUnitIncrement(20);
+        
+        // 2. 套用 Slim ScrollBar 樣式
         AppUIManager.applySlimScrollBar(sp);
 
+        // 3. 監聽視窗縮放，動態調整內部公告列的寬度 (比照 TodoPanel 實現平滑自適應)
         sp.getViewport().addComponentListener(new ComponentAdapter() {
             @Override public void componentResized(ComponentEvent e) {
                 int vpW = sp.getViewport().getWidth();
