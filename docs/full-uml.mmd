@@ -1,0 +1,667 @@
+classDiagram
+direction LR
+
+%% =========================
+%% App Entry
+%% =========================
+
+class Main {
+  -List~Task~ tasks
+  -List~TodoItem~ todos
+  -List~Schedule~ schedules
+  -CategoryManager categoryManager
+  -XmlDataStore dataStore
+  -MainFrame mainFrame
+  -ReminderService reminderService
+  -TrayManager trayManager
+  +main(String[] args) void
+  -saveTasksToXML() void
+  -saveTodosToXML() void
+  -saveSchedulesToXML() void
+  -hideToTray() void
+  -toggleReminderPause() void
+  -showReminderNotification(ReminderNotification) void
+  -exitApplication() void
+}
+
+%% =========================
+%% Model Layer
+%% =========================
+
+class Task {
+  -int id
+  -String title
+  -String description
+  -String date
+  -String time
+  -boolean hasDeadline
+  -boolean important
+  -boolean completed
+  -String category
+  -List~Reminder~ reminders
+  +getTitle() String
+  +getContent() String
+  +hasDeadline() boolean
+  +isImportant() boolean
+  +isCompleted() boolean
+  +setReminders(List~Reminder~) void
+}
+
+class TodoItem {
+  -int id
+  -String title
+  -String description
+  -String reminderTime
+  -String deadlineTime
+  -boolean completed
+  -String category
+  -String sourceUrl
+  -List~Reminder~ reminders
+  +getTitle() String
+  +getDeadlineTime() String
+  +isCompleted() boolean
+  +setDeadlineTime(String) void
+  +setReminders(List~Reminder~) void
+}
+
+class Reminder {
+  -Type type
+  -String dateTime
+  -int minutesBefore
+  +absolute(String) Reminder
+  +beforeDeadline(int) Reminder
+  +resolve(LocalDateTime) LocalDateTime
+  +toDisplayText() String
+}
+
+class ReminderType {
+  <<enumeration>>
+  ABSOLUTE
+  BEFORE_DEADLINE
+}
+
+class Schedule {
+  -int id
+  -String name
+  -boolean active
+  -List~Course~ courses
+  +getCourses() List~Course~
+  +isActive() boolean
+}
+
+class Course {
+  -int id
+  -String name
+  -String code
+  -String location
+  -String professor
+  -String department
+  -String classYear
+  -int dayOfWeek
+  -int startPeriod
+  -int endPeriod
+  -String note
+  -int colorIndex
+  -String scheduleString
+}
+
+class NewsItem {
+  -int id
+  -String title
+  -String url
+  -String fetchedTime
+}
+
+%% =========================
+%% Persistence Layer
+%% =========================
+
+class XmlDataStore {
+  -String TASKS_XML
+  -String TODOS_XML
+  -String SCHEDULES_XML
+  +loadTasks(List~Task~) void
+  +loadTodos(List~TodoItem~) void
+  +loadSchedules(List~Schedule~) void
+  +saveTasks(List~Task~) void
+  +saveTodos(List~TodoItem~) void
+  +saveSchedules(List~Schedule~) void
+  -parse(File) Document
+  -newDocument() Document
+  -loadReminderList(Element) ArrayList~Reminder~
+  -appendReminders(Document, Element, List~Reminder~) void
+  -writeXML(Document, String) void
+}
+
+class TronclassSessionStore {
+  -String SESSION_FILE
+  +load() SavedSession
+  +save(String, String) void
+  +clear() void
+}
+
+class SavedSession {
+  -String userName
+  -String cookie
+  +getUserName() String
+  +getCookie() String
+}
+
+%% =========================
+%% Service Layer
+%% =========================
+
+class CategoryManager {
+  +String ALL
+  +String NONE
+  -String XML_PATH
+  -List~String~ categories
+  -List~Runnable~ listeners
+  -List~Consumer~ removeListeners
+  -List~BiConsumer~ renameListeners
+  +getCategories() List~String~
+  +getAllOptions() List~String~
+  +isProtected(String) boolean
+  +addCategory(String) boolean
+  +removeCategory(String) boolean
+  +renameCategory(String, String) boolean
+  +addListener(Runnable) void
+}
+
+class ReminderService {
+  -List~Task~ tasks
+  -List~TodoItem~ todos
+  -Notifier notifier
+  -Runnable onChanged
+  -Set~String~ shownReminderKeys
+  -Timer scanTimer
+  -boolean paused
+  +start() void
+  +stop() void
+  +isPaused() boolean
+  +togglePaused() boolean
+  -scanReminders() void
+  -scanTaskReminders(LocalDateTime) boolean
+  -scanTodoReminders(LocalDateTime) boolean
+  -markPastRemindersAsShown() void
+}
+
+class Notifier {
+  <<interface>>
+  +showReminder(ReminderNotification) void
+}
+
+class TargetType {
+  <<enumeration>>
+  TASK
+  TODO
+}
+
+class ReminderNotification {
+  -TargetType targetType
+  -int targetId
+  -String title
+  -String message
+  +getTargetType() TargetType
+  +getTargetId() int
+  +getTitle() String
+  +getMessage() String
+}
+
+class SessionManager {
+  -State state
+  -String userName
+  -String cookie
+  -List~SessionListener~ listeners
+  -TronclassSessionStore sessionStore
+  +getState() State
+  +getUserName() String
+  +getCookie() String
+  +isLoggedIn() boolean
+  +onLoginSuccess(String, String) void
+  +restoreSavedSession() boolean
+  +logout() void
+  +notifySessionExpired() void
+  +addListener(SessionListener) void
+}
+
+class State {
+  <<enumeration>>
+  LOGGED_OUT
+  LOGGED_IN
+  EXPIRED
+}
+
+class SessionListener {
+  <<interface>>
+  +onStateChanged(State, String) void
+}
+
+class TronclassService {
+  -String BASE_URL
+  -String[] TODO_CANDIDATES
+  -List~String~ FILTER_KEYWORDS
+  +parseName(String) String
+  +validateCookie(String) boolean
+  +syncTodos(String, List~TodoItem~, CategoryManager, Runnable) int
+  -mapToCategory(String) String
+  -findWorkingEndpoint(String) String
+  -parseTodos(String) List~TronclassTodo~
+  -parseSingle(String) TronclassTodo
+  -fetchTodoDescription(String, String, String) String
+}
+
+class SessionExpiredException {
+  +SessionExpiredException()
+  +SessionExpiredException(String)
+}
+
+class TronclassTodo {
+  ~String title
+  ~String type
+  ~String deadline
+  ~String courseId
+  ~String activityId
+  ~String url
+}
+
+class PdfScheduleImporter {
+  -String[] DAY_NAMES
+  -Pattern TIME_PATTERN
+  -Pattern TERM_PATTERN
+  -Pattern CLASS_SUFFIX_PATTERN
+  +importSchedule(File, int) Schedule
+  -buildScheduleName(List~Token~, File) String
+  -findDayCenters(List~Token~) Map~Integer,Float~
+  -findPeriodMarks(List~Token~) List~PeriodMark~
+  -collectCellTokens(...) Map~CellKey,List~Token~~
+  -mergeSlots(List~Slot~) List~Slot~
+  -buildScheduleString(List~Slot~) String
+}
+
+class Token {
+  ~String text
+  ~float x
+  ~float y
+  ~float width
+  ~float height
+  +centerX() float
+}
+
+class PositionedTextStripper {
+  -List~Token~ tokens
+  +getTokens() List~Token~
+  #processTextPosition(TextPosition) void
+}
+
+class CellKey {
+  ~int day
+  ~int period
+}
+
+class PeriodMark {
+  ~int period
+  ~float y
+}
+
+class Slot {
+  ~int day
+  ~int startPeriod
+  ~int endPeriod
+}
+
+class CourseInfo {
+  ~String name
+  ~String code
+  ~String department
+  ~String classYear
+  ~String location
+}
+
+class CourseKey {
+  ~String name
+  ~String code
+  ~String location
+  ~String department
+  ~String classYear
+}
+
+class SchoolNewsCrawler {
+  -List~NewsItem~ cachedNews
+  -boolean loading
+  -Runnable onComplete
+  +loadAsync() void
+  +loadSync() void
+  +getCachedNews() List~NewsItem~
+  +isLoading() boolean
+  +clearCache() void
+}
+
+class NtouCseScraper {
+  -String BASE_URL
+  -LocalDate ONE_MONTH_AGO
+  -Map~String,String~ CATEGORIES
+  +scrapeRecentNews() List~NewsItem~
+  -scrapeCategory(String, String, List~NewsItem~, String, int) int
+}
+
+%% =========================
+%% UI Layer
+%% =========================
+
+class MainFrame {
+  -JPanel contentArea
+  -CardLayout cardLayout
+  -CalendarPanel calendarPanel
+  -TodoPanel todoPanel
+  -SchoolNewsPanel newsPanel
+  -SchedulePanel schedulePanel
+  -SessionManager sessionManager
+  -Timer cookieValidationTimer
+  +setCloseRequestHandler(Runnable) void
+  +hideToTray() void
+  +restoreFromTray() void
+  +refreshReminderViews() void
+  +openReminderTarget(TargetType, int) void
+  +exitApplication() void
+  +showWindow() void
+}
+
+class NavItem {
+  -boolean active
+  -boolean hovered
+  -List~ActionListener~ listeners
+  -JLabel nameLabel
+  +addActionListener(ActionListener) void
+  +setActive(boolean) void
+}
+
+class CalendarPanel {
+  -List~Task~ tasks
+  -CategoryManager categoryManager
+  -Runnable saveCallback
+  -String currentFilter
+  +updateCalendar() void
+  +revealTask(int) void
+}
+
+class TodoPanel {
+  -List~TodoItem~ todos
+  -Runnable saveCallback
+  -CategoryManager categoryManager
+  -Set~Integer~ expandedDescriptions
+  +getTodos() List~TodoItem~
+  +refreshList() void
+  +revealTodo(int) void
+}
+
+class SchedulePanel {
+  -List~Schedule~ schedules
+  -Runnable saveCallback
+  -PdfScheduleImporter pdfImporter
+  +refreshScheduleList() void
+  +switchSchedule(Schedule) void
+}
+
+class StyledComboBoxUI {
+  +createPopup() ComboPopup
+  #createArrowButton() JButton
+}
+
+class SlotRow {
+  ~JComboBox dayCombo
+  ~JComboBox startCombo
+  ~JComboBox endCombo
+  ~JButton removeBtn
+}
+
+class SchoolNewsPanel {
+  -SchoolNewsCrawler crawler
+  -Set~String~ starredUrls
+  -Set~String~ unstarredDefaultUrls
+  -JTextField searchField
+  -JComboBox categoryCombo
+}
+
+class CategoryTagBar {
+  -CategoryManager categoryManager
+  -Consumer~String~ onFilterChanged
+  -String selectedCategory
+  +refreshTags() void
+  -showManageDialog() void
+}
+
+class ReminderEditorPanel {
+  -int MAX_REMINDERS
+  -JDialog owner
+  -LocalDateTime baseDateTime
+  -List~ReminderRow~ rows
+  +getReminders(LocalDateTime) List~Reminder~
+  +validateReminders(LocalDateTime) String
+}
+
+class ReminderRow {
+  ~JPanel root
+  ~JComboBox typeCombo
+  ~JSpinner amountSpinner
+  ~JComboBox unitCombo
+}
+
+class ReminderChips {
+  +build(List~Reminder~, LocalDateTime, int) JPanel
+  +hasUpcoming(List~Reminder~, LocalDateTime) boolean
+  -upcoming(List~Reminder~, LocalDateTime) List~ReminderInfo~
+}
+
+class ReminderInfo {
+  ~Reminder reminder
+  ~LocalDateTime target
+  ~String text
+}
+
+class ChipLabel {
+  -String text
+  -boolean active
+}
+
+class TronclassLoginDialog {
+  -LoginCallback callback
+  -SessionManager sessionManager
+  -CategoryManager categoryManager
+  -List~TodoItem~ currentTodos
+  -Runnable saveCallback
+  -JTextArea cookieArea
+  +startSync() void
+}
+
+class LoginCallback {
+  <<interface>>
+  +onSuccess(String, String, int) void
+}
+
+class TrayManager {
+  -MainFrame mainFrame
+  -Runnable exitCallback
+  -Runnable toggleReminderCallback
+  -Supplier~Boolean~ pausedSupplier
+  -TrayIcon trayIcon
+  -JWindow menuWindow
+  +install() boolean
+  +isInstalled() boolean
+  +displayMessage(String, String) void
+  +displayMessage(String, String, Runnable) void
+  +remove() void
+}
+
+class AppUIManager {
+  +applyRoundedWindowShape(Window, int) void
+  +keepWindowInScreen(Window) void
+  +enableWindowDrag(Window, JComponent) void
+  +applySlimScrollBar(JScrollPane) void
+  +showDatePicker(Component, LocalDate, DatePickerCallback) void
+  +showTimePicker(Component, int, int, TimePickerCallback) void
+}
+
+class SlimScrollBarUI {
+  -boolean hovered
+  #paintTrack(Graphics, JComponent, Rectangle) void
+  #paintThumb(Graphics, JComponent, Rectangle) void
+}
+
+class DatePickerCallback {
+  <<interface>>
+  +onDateSelected(LocalDate) void
+}
+
+class DatePickerPanel {
+  -YearMonth currentMonth
+  -DatePickerCallback callback
+  -JPanel gridPanel
+  -renderGrid(LocalDate) void
+}
+
+class TimePickerCallback {
+  <<interface>>
+  +onTimeSelected(int, int) void
+}
+
+class TimePickerPanel {
+  -int hour
+  -int minute
+  -Mode mode
+  -boolean pm
+  -refreshDisplay() void
+}
+
+class Mode {
+  <<enumeration>>
+  HOUR
+  MINUTE
+}
+
+class ClockFace {
+  -TimePickerPanel panel
+  #paintComponent(Graphics) void
+}
+
+class AppColors {
+  <<utility>>
+  +Color BG_PRIMARY
+  +Color TEXT_PRIMARY
+  +Color ACCENT
+  +Color DANGER
+  +Color SUCCESS
+}
+
+class AppFonts {
+  <<utility>>
+  +Font TITLE_LARGE
+  +Font BODY_SMALL
+  +Font CAPTION
+  +Font NAV
+}
+
+%% =========================
+%% Relationships
+%% =========================
+
+Main --> MainFrame : creates
+Main --> XmlDataStore : load/save
+Main --> CategoryManager : owns
+Main --> ReminderService : starts
+Main --> TrayManager : installs
+Main --> Task
+Main --> TodoItem
+Main --> Schedule
+
+MainFrame *-- CalendarPanel
+MainFrame *-- TodoPanel
+MainFrame *-- SchedulePanel
+MainFrame *-- SchoolNewsPanel
+MainFrame *-- SessionManager
+MainFrame *-- NavItem
+MainFrame --> TronclassLoginDialog
+MainFrame --> ReminderService : TargetType
+
+CalendarPanel --> Task
+CalendarPanel --> CategoryManager
+CalendarPanel --> ReminderEditorPanel
+CalendarPanel --> ReminderChips
+
+TodoPanel --> TodoItem
+TodoPanel --> CategoryManager
+TodoPanel --> ReminderEditorPanel
+TodoPanel --> ReminderChips
+
+SchedulePanel --> Schedule
+SchedulePanel --> Course
+SchedulePanel --> PdfScheduleImporter
+SchedulePanel *-- StyledComboBoxUI
+SchedulePanel *-- SlotRow
+
+SchoolNewsPanel --> SchoolNewsCrawler
+SchoolNewsPanel --> NewsItem
+
+CategoryTagBar --> CategoryManager
+TronclassLoginDialog --> TronclassService
+TronclassLoginDialog --> SessionManager
+TronclassLoginDialog --> TodoItem
+TronclassLoginDialog ..> LoginCallback
+
+TrayManager --> MainFrame
+
+ReminderService --> Task
+ReminderService --> TodoItem
+ReminderService --> Reminder
+ReminderService ..> Notifier
+ReminderService *-- ReminderNotification
+ReminderNotification --> TargetType
+
+SessionManager --> TronclassSessionStore
+SessionManager --> State
+SessionManager ..> SessionListener
+TronclassSessionStore *-- SavedSession
+
+TronclassService --> TodoItem
+TronclassService --> CategoryManager
+TronclassService *-- SessionExpiredException
+TronclassService *-- TronclassTodo
+
+PdfScheduleImporter --> Schedule
+PdfScheduleImporter --> Course
+PdfScheduleImporter *-- Token
+PdfScheduleImporter *-- PositionedTextStripper
+PdfScheduleImporter *-- CellKey
+PdfScheduleImporter *-- PeriodMark
+PdfScheduleImporter *-- Slot
+PdfScheduleImporter *-- CourseInfo
+PdfScheduleImporter *-- CourseKey
+
+SchoolNewsCrawler --> NtouCseScraper
+SchoolNewsCrawler --> NewsItem
+NtouCseScraper --> NewsItem
+
+XmlDataStore --> Task
+XmlDataStore --> TodoItem
+XmlDataStore --> Schedule
+XmlDataStore --> Course
+XmlDataStore --> Reminder
+
+Task *-- Reminder
+TodoItem *-- Reminder
+Reminder --> ReminderType
+Schedule *-- Course
+
+ReminderEditorPanel --> Reminder
+ReminderEditorPanel *-- ReminderRow
+ReminderChips --> Reminder
+ReminderChips *-- ReminderInfo
+ReminderChips *-- ChipLabel
+
+AppUIManager *-- SlimScrollBarUI
+AppUIManager *-- DatePickerPanel
+AppUIManager *-- TimePickerPanel
+AppUIManager ..> DatePickerCallback
+AppUIManager ..> TimePickerCallback
+TimePickerPanel --> Mode
+TimePickerPanel *-- ClockFace
