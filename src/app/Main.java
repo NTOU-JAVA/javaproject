@@ -13,7 +13,8 @@ import ui.MainFrame;
 import ui.TrayManager;
 
 /**
- * Main：應用程式進入點，負責初始化資料與 UI。
+ * 程式進入點。
+ * 負責載入 XML 資料、建立主視窗、啟動提醒服務，並集中處理關閉與系統匣流程。
  */
 public class Main {
     private final List<Task>     tasks     = new ArrayList<>();

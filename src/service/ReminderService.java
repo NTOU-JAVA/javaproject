@@ -11,6 +11,10 @@ import model.Reminder;
 import model.Task;
 import model.TodoItem;
 
+/**
+ * 定時掃描任務與代辦事項的提醒。
+ * 透過 Swing Timer 每 30 秒檢查一次，到期時交由 Notifier 顯示通知。
+ */
 public class ReminderService {
     public interface Notifier {
         void showReminder(ReminderNotification notification);

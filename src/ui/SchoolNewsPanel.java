@@ -20,14 +20,15 @@ import model.NewsItem;
 import service.SchoolNewsCrawler;
 
 /**
- * SchoolNewsPanel：學校/系所公告列表。
+ * 學校與系所公告列表。
+ * 支援關鍵字搜尋、分類篩選與星號收藏，公告資料由 SchoolNewsCrawler 非同步載入。
  */
 public class SchoolNewsPanel extends JPanel {
 
     private static final Path STAR_FILE = Path.of("data", "news-stars.txt");
     private static final Path DEFAULT_UNSTAR_FILE = Path.of("data", "news-default-unstarred.txt");
     private static final String CATEGORY_ALL = "全部";
-    // 請將原本的選項替換為這四個你需要的分類
+    // UI 顯示的公告分類；classifyNews() 會依標題關鍵字對應到這些選項。
     private static final String[] CATEGORY_OPTIONS = {
         CATEGORY_ALL, "行事曆", "CPE", "學業資訊", "最新消息"
     };
@@ -273,7 +274,7 @@ public class SchoolNewsPanel extends JPanel {
         int displayCount = 0;
         for (NewsItem item : news) {
             String category = classifyNews(item);
-            if (category == null) continue; // 【新增】如果不是我們要的四種分類，直接跳過不顯示
+            if (category == null) continue; // 直接跳過不顯示
 
             if (!isVisibleByKeyword(item, query)) continue;
             if (!isVisibleByCategory(item, selectedCategory)) continue;
@@ -300,8 +301,8 @@ public class SchoolNewsPanel extends JPanel {
     private boolean isVisibleByKeyword(NewsItem item, String query) {
         if (query.isEmpty()) return true;
         String category = classifyNews(item);
-        String categoryStr = (category != null) ? category : ""; // 【修改】防呆處理
-        
+        String categoryStr = (category != null) ? category : "";
+
         return item.getTitle().toLowerCase().contains(query)
                 || categoryStr.toLowerCase().contains(query)
                 || extractHost(item.getUrl()).toLowerCase().contains(query);
@@ -361,7 +362,7 @@ public class SchoolNewsPanel extends JPanel {
                 if (!url.isEmpty()) starredUrls.add(url);
             }
         } catch (IOException ignored) {
-            // Starred news is a convenience feature; the list still works if loading fails.
+            // 收藏狀態只是偏好設定，讀取失敗不影響公告列表使用。
         }
     }
 
@@ -373,7 +374,7 @@ public class SchoolNewsPanel extends JPanel {
                 if (!url.isEmpty()) unstarredDefaultUrls.add(url);
             }
         } catch (IOException ignored) {
-            // Default star exclusions are optional local preferences.
+            // 預設取消收藏清單也是偏好設定，讀取失敗時直接略過。
         }
     }
 
@@ -382,7 +383,7 @@ public class SchoolNewsPanel extends JPanel {
             Files.createDirectories(STAR_FILE.getParent());
             Files.write(STAR_FILE, starredUrls, StandardCharsets.UTF_8);
         } catch (IOException ignored) {
-            // Keep the UI responsive even if local preference saving fails.
+            // 偏好設定儲存失敗時不阻塞 UI。
         }
     }
 
@@ -391,7 +392,7 @@ public class SchoolNewsPanel extends JPanel {
             Files.createDirectories(DEFAULT_UNSTAR_FILE.getParent());
             Files.write(DEFAULT_UNSTAR_FILE, unstarredDefaultUrls, StandardCharsets.UTF_8);
         } catch (IOException ignored) {
-            // Keep the UI responsive even if local preference saving fails.
+            // 偏好設定儲存失敗時不阻塞 UI。
         }
     }
 

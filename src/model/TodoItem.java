@@ -3,6 +3,10 @@ package model;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * 代辦事項資料。
+ * 與 Task 不同，TodoItem 偏向清單式管理，並可保存 Tronclass 來源連結與截止提醒。
+ */
 public class TodoItem {
     private int id;
     private String title;

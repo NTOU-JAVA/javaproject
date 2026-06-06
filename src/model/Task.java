@@ -3,6 +3,10 @@ package model;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * 行事曆上的任務資料。
+ * 任務可設定日期、時間、重要程度、完成狀態、分類與最多 10 筆提醒。
+ */
 public class Task {
     private int id;
     private String title;

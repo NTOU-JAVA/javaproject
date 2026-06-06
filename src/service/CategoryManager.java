@@ -42,7 +42,7 @@ public class CategoryManager {
         load();
     }
 
-    // ── 讀取 ─────────────────────────────────────────────────────────────────
+    // 讀取
     private void load() {
         File f = new File(XML_PATH);
         if (!f.exists()) {
@@ -73,7 +73,7 @@ public class CategoryManager {
         }
     }
 
-    // ── 儲存 ─────────────────────────────────────────────────────────────────
+    // 儲存
     public void save() {
         try {
             new File("data").mkdirs();
@@ -94,7 +94,7 @@ public class CategoryManager {
         }
     }
 
-    // ── 查詢 ─────────────────────────────────────────────────────────────────
+    // 查詢
 
     /** 回傳所有分類（不含「全部」虛擬項） */
     public List<String> getCategories() {
@@ -114,7 +114,7 @@ public class CategoryManager {
         return PROTECTED_CATEGORIES.contains(name);
     }
 
-    // ── 新增 ─────────────────────────────────────────────────────────────────
+    // 新增
     public boolean addCategory(String name) {
         name = name.trim();
         if (name.isEmpty() || categories.contains(name) || ALL.equals(name)) return false;
@@ -124,7 +124,7 @@ public class CategoryManager {
         return true;
     }
 
-    // ── 刪除（受保護分類不可刪） ──────────────────────────────────────────────
+    // 刪除（受保護分類不可刪）
     public boolean removeCategory(String name) {
         if (isProtected(name)) return false;
         if (!categories.remove(name)) return false;
@@ -134,7 +134,7 @@ public class CategoryManager {
         return true;
     }
 
-    // ── 重新命名（受保護分類不可改） ──────────────────────────────────────────
+    // 重新命名（受保護分類不可改）
     public boolean renameCategory(String oldName, String newName) {
         if (isProtected(oldName)) return false;
         newName = newName.trim();
@@ -147,7 +147,7 @@ public class CategoryManager {
         return true;
     }
 
-    // ── 觀察者 ───────────────────────────────────────────────────────────────
+    // 觀察者
     public void addListener(Runnable r)    { listeners.add(r); }
     public void removeListener(Runnable r) { listeners.remove(r); }
 

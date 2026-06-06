@@ -89,7 +89,7 @@ public class CategoryTagBar extends JPanel {
         rebuildTags();
     }
 
-    // ── Tag 列重建 ─────────────────────────────────────────────────────────
+    // Tag 列重建
     public void rebuildTags() {
         tagRow.removeAll();
         List<String> opts = categoryManager.getAllOptions();
@@ -152,7 +152,7 @@ public class CategoryTagBar extends JPanel {
 
     public String getSelectedCategory() { return selectedCategory; }
 
-    // ── 管理 Dialog ────────────────────────────────────────────────────────
+    // 管理 Dialog
     private void openManageDialog() {
         Window owner = SwingUtilities.getWindowAncestor(this);
         JDialog dlg = new JDialog(owner, "管理分類", Dialog.ModalityType.APPLICATION_MODAL);

@@ -4,7 +4,15 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 
+/**
+ * 單筆提醒設定。
+ * 可表示固定時間提醒，或依任務/代辦截止時間往前推算的提醒。
+ */
 public class Reminder {
+    /**
+     * ABSOLUTE 代表指定固定提醒時間；
+     * BEFORE_DEADLINE 代表依截止時間往前推算。
+     */
     public enum Type {
         ABSOLUTE,
         BEFORE_DEADLINE

@@ -29,14 +29,14 @@ public class SessionManager {
     private final List<SessionListener> listeners = new ArrayList<>();
     private final TronclassSessionStore sessionStore = new TronclassSessionStore();
 
-    // ── 查詢 ────────────────────────────────────────────────────────────────
+    // 查詢
 
     public State  getState()    { return state; }
     public String getUserName() { return userName; }
     public String getCookie()   { return cookie; }
     public boolean isLoggedIn() { return state == State.LOGGED_IN; }
 
-    // ── 登入成功時呼叫（由 TronclassLoginDialog 回調） ───────────────────────
+    // 登入成功時呼叫（由 TronclassLoginDialog 回調）
 
     public void onLoginSuccess(String name, String cookie) {
         this.userName = name;
@@ -45,7 +45,7 @@ public class SessionManager {
         setState(State.LOGGED_IN);
     }
 
-    // ── 程式啟動時嘗試恢復上次登入 ─────────────────────────────────────────
+    // 程式啟動時嘗試恢復上次登入
 
     public boolean restoreSavedSession() {
         TronclassSessionStore.SavedSession saved = sessionStore.load();
@@ -56,7 +56,7 @@ public class SessionManager {
         return true;
     }
 
-    // ── 主動登出 ─────────────────────────────────────────────────────────────
+    // 主動登出
 
     public void logout() {
         this.userName = null;
@@ -65,7 +65,7 @@ public class SessionManager {
         setState(State.LOGGED_OUT);
     }
 
-    // ── Cookie 失效（由後台執行緒偵測後，切回 EDT 呼叫） ─────────────────────
+    // Cookie 失效（由後台執行緒偵測後，切回 EDT 呼叫）
 
     public void notifySessionExpired() {
         if (state != State.LOGGED_IN) return; // 避免重複觸發
@@ -74,7 +74,7 @@ public class SessionManager {
         setState(State.EXPIRED);
     }
 
-    // ── 觀察者 ───────────────────────────────────────────────────────────────
+    // 觀察者
 
     public void addListener(SessionListener l)    { listeners.add(l); }
     public void removeListener(SessionListener l) { listeners.remove(l); }

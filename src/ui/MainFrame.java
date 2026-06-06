@@ -14,16 +14,9 @@ import service.SessionManager;
 import service.TronclassService;
 
 /**
- * MainFrame：主視窗，含 Topbar、Sidebar、CardLayout 內容區。
- *
- * v0.6 變更：
- *  - 引入 SessionManager 統一管理登入狀態
- *  - Topbar 右側依狀態顯示：「登入 Tronclass」/ 已登入（名稱＋登出＋重新同步）/ 失效提示
- *  - Cookie 失效時：
- *      1. Topbar 顯示橘色警告列
- *      2. 彈出一次通知 Dialog（僅第一次）
- *      3. 使用者可點「重新登入」再次開啟登入流程
- *  - 背景 Timer（每 15 分鐘）驗證 cookie 是否仍有效
+ * 主視窗，負責組合 Topbar、Sidebar 與 CardLayout 內容區。
+ * 各功能頁面共用同一批資料清單，透過 save callback 回寫 XML。
+ * Tronclass 登入狀態由 SessionManager 管理，狀態變化時更新右上角登入區。
  */
 public class MainFrame extends JFrame {
 
@@ -47,15 +40,15 @@ public class MainFrame extends JFrame {
 
     private CategoryManager categoryManager;
 
-    // ── Session 管理 ────────────────────────────────────────────────────────
+    // Session 管理
     private final SessionManager sessionManager = new SessionManager();
 
-    // ── Topbar 動態元件 ──────────────────────────────────────────────────────
+    // Topbar 動態元件
     private JPanel  topbarUserArea;   // 右側動態區域（CardLayout 切換）
     private CardLayout topbarCard;
     private boolean expiredDialogShown = false;
 
-    // 定時背景驗證（每 15 分鐘）
+    // 定時背景驗證 Tronclass Cookie 是否仍有效
     private Timer cookieValidationTimer;
 
     public MainFrame(List<Task> tasks, List<TodoItem> todos, List<Schedule> schedules,
@@ -127,14 +120,12 @@ public class MainFrame extends JFrame {
             validateCookieInBackground();
         }
 
-        // 啟動背景定時驗證（2 分鐘）
+        // 每 2 分鐘在背景檢查一次 Cookie，避免 UI 顯示過期登入狀態。
         cookieValidationTimer = new Timer(2 * 60 * 1000, e -> validateCookieInBackground());
         cookieValidationTimer.start();
     }
 
-    // ══════════════════════════════════════════════════════════════════════════
     // Topbar
-    // ══════════════════════════════════════════════════════════════════════════
 
     private JPanel buildTopbar() {
         JPanel bar = new JPanel(new BorderLayout());
@@ -258,9 +249,7 @@ public class MainFrame extends JFrame {
         return p;
     }
 
-    // ══════════════════════════════════════════════════════════════════════════
     // Session 狀態變化處理（在 EDT 上執行）
-    // ══════════════════════════════════════════════════════════════════════════
 
     private void onSessionStateChanged(SessionManager.State state, String userName) {
         switch (state) {
@@ -331,9 +320,7 @@ public class MainFrame extends JFrame {
         }
     }
 
-    // ══════════════════════════════════════════════════════════════════════════
     // 背景定時驗證 cookie
-    // ══════════════════════════════════════════════════════════════════════════
 
     private void validateCookieInBackground() {
         if (!sessionManager.isLoggedIn()) return;
@@ -350,9 +337,7 @@ public class MainFrame extends JFrame {
         }).start();
     }
 
-    // ══════════════════════════════════════════════════════════════════════════
     // 開啟登入 Dialog
-    // ══════════════════════════════════════════════════════════════════════════
 
     private void openLoginDialog() {
         List<TodoItem> todos = todoPanel.getTodos();
@@ -379,9 +364,7 @@ public class MainFrame extends JFrame {
         dlg.setVisible(true);
     }
 
-    // ══════════════════════════════════════════════════════════════════════════
     // Tronclass 狀態 Dialog
-    // ══════════════════════════════════════════════════════════════════════════
 
     private enum DialogIcon { SUCCESS, WARNING }
 
@@ -580,9 +563,7 @@ public class MainFrame extends JFrame {
         );
     }
 
-    // ══════════════════════════════════════════════════════════════════════════
     // Topbar 小工具
-    // ══════════════════════════════════════════════════════════════════════════
 
     private JLabel makeAvatar(String text) {
         JLabel l = new JLabel(text, SwingConstants.CENTER);
@@ -607,9 +588,7 @@ public class MainFrame extends JFrame {
         return b;
     }
 
-    // ══════════════════════════════════════════════════════════════════════════
     // Sidebar
-    // ══════════════════════════════════════════════════════════════════════════
 
     private JPanel buildSidebar() {
         JPanel sb = new JPanel();
@@ -679,7 +658,7 @@ public class MainFrame extends JFrame {
         cardLayout.show(contentArea, key);
     }
 
-    // ── NavItem ────────────────────────────────────────────────────────────
+    // NavItem
 
     static class NavItem extends JPanel {
         private boolean active  = false;

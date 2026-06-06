@@ -8,7 +8,8 @@ import java.util.regex.*;
 import model.TodoItem;
 
 /**
- * TronclassService：整合登入 Cookie 後的資料同步。（Production 完全無輸出乾淨版）
+ * Tronclass 資料同步服務。
+ * 使用使用者提供的 Cookie 呼叫 Tronclass API，解析待辦事項後合併到本機 TodoItem 清單。
  */
 public class TronclassService {
 
@@ -97,7 +98,7 @@ public class TronclassService {
                 }
             }
 
-            // ── 情況 A：如果事項之前已經匯入過了 ──
+            // 情況 A：如果事項之前已經匯入過了
             if (existingItem != null) {
                 if (existingItem.getDescription().isBlank()) {
                     String desc = "";
@@ -115,7 +116,7 @@ public class TronclassService {
                 continue; 
             }
             
-            // ── 情況 B：全新事項 ──
+            // 情況 B：全新事項
             maxId++;
             String mappedCategory = mapToCategory(tt.type);
             

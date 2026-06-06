@@ -14,8 +14,8 @@ import model.TodoItem;
 import service.CategoryManager;
 
 /**
- * TodoPanel：代辦事項面板。
- * v0.5：加入分類 Tag 篩選列與新增/編輯時的分類選擇。
+ * 代辦事項面板。
+ * 負責顯示、篩選、新增與編輯 TodoItem，並提供 Tronclass 同步後刷新清單的入口。
  */
 public class TodoPanel extends JPanel {
 
@@ -90,7 +90,7 @@ public class TodoPanel extends JPanel {
     /** 回傳底層 todos 清單（與 Main 共用同一個參考，供登入同步使用）。 */
     public List<TodoItem> getTodos() { return todos; }
 
-    // ── 頂部列 ──────────────────────────────────────────────────────────────
+    // 頂部列
     private JPanel buildTopNav() {
         JPanel nav = new JPanel(new BorderLayout());
         nav.setBackground(AppColors.BG_SECONDARY);
@@ -114,7 +114,7 @@ public class TodoPanel extends JPanel {
         return nav;
     }
 
-    // ── Tag 篩選列 ───────────────────────────────────────────────────────────
+    // Tag 篩選列
     private CategoryTagBar buildTagBar() {
         return new CategoryTagBar(categoryManager, filter -> {
             currentFilter = filter;
@@ -122,7 +122,7 @@ public class TodoPanel extends JPanel {
         });
     }
 
-    // ── 清單區 ──────────────────────────────────────────────────────────────
+    // 清單區
     private JScrollPane buildListArea() {
         listContainer.setLayout(new BoxLayout(listContainer, BoxLayout.Y_AXIS));
         listContainer.setBackground(AppColors.BG_PRIMARY);
@@ -133,16 +133,15 @@ public class TodoPanel extends JPanel {
 
         JScrollPane sp = new JScrollPane(wrapper);
         sp.setBorder(new MatteBorder(1, 0, 0, 0, AppColors.BORDER_DEFAULT));
-        // 1. 強制關閉水平滾動條，與 TodoPanel 保持一致
+        // 清單列會依 viewport 寬度重新計算高度，因此關閉水平捲軸。
         sp.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
         sp.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED);
         sp.getViewport().setBackground(AppColors.BG_PRIMARY);
         sp.getVerticalScrollBar().setUnitIncrement(20);
         
-        // 2. 套用 Slim ScrollBar 樣式
         AppUIManager.applySlimScrollBar(sp);
 
-        // 3. 監聽視窗縮放，動態調整內部公告列的寬度 (比照 TodoPanel 實現平滑自適應)
+        // 視窗寬度改變時重算每列高度，避免長文字被截斷。
         sp.getViewport().addComponentListener(new ComponentAdapter() {
             @Override public void componentResized(ComponentEvent e) {
                 fitRowsToViewport(sp);
@@ -152,7 +151,7 @@ public class TodoPanel extends JPanel {
         return sp;
     }
 
-    // ── 底部提示列 ────────────────────────────────────────────────────────────
+    // 底部提示列
     private JPanel buildHintBar() {
         JPanel bar = new JPanel(new FlowLayout(FlowLayout.RIGHT, 16, 6));
         bar.setBackground(AppColors.BG_SECONDARY);
@@ -164,7 +163,7 @@ public class TodoPanel extends JPanel {
         return bar;
     }
 
-    // ── 建立每一列 TodoItem 的 UI ─────────────────────────────────────────────
+    // 建立每一列 TodoItem 的 UI
     private JPanel buildItemRow(TodoItem item, int rowIndex) {
         JPanel row = new JPanel(new BorderLayout(0, 0)) {
             @Override protected void paintComponent(Graphics g) {
@@ -468,7 +467,7 @@ public class TodoPanel extends JPanel {
         sp.revalidate();
     }
 
-    // ── 新增/編輯 Dialog ─────────────────────────────────────────────────────
+    // 新增/編輯 Dialog
     private void showTodoDialog(TodoItem editItem) {
         boolean isEdit = (editItem != null);
 
@@ -545,7 +544,7 @@ public class TodoPanel extends JPanel {
         descScroll.setMinimumSize(new Dimension(0, 86));
         AppUIManager.applySlimScrollBar(descScroll);
 
-        // ── 分類下拉 ──
+        // 分類下拉
         java.util.List<String> catOptions = new java.util.ArrayList<>();
         catOptions.add("（未分類）");
         catOptions.addAll(categoryManager.getCategories());
@@ -562,7 +561,7 @@ public class TodoPanel extends JPanel {
             catCombo.setSelectedItem(editItem.getCategory());
         }
 
-        // ── 截止時間 ──
+        // 截止時間
         LocalDateTime base = nextFullHour();
         if (isEdit && editItem.getDeadlineTime() != null) {
             try { base = LocalDateTime.parse(editItem.getDeadlineTime(), REMINDER_FMT); }
@@ -873,7 +872,7 @@ public class TodoPanel extends JPanel {
         return l;
     }
 
-    // ── 更新清單顯示（套用篩選） ──────────────────────────────────────────────
+    // 更新清單顯示（套用篩選）
     public void refreshList() {
         if (clearOverdueReminders()) {
             saveCallback.run();

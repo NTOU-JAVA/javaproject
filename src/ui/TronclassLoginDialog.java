@@ -9,17 +9,9 @@ import service.SessionManager;
 import service.TronclassService;
 
 /**
- * TronclassLoginDialog：Tronclass 登入流程視窗。
- *
- * 流程：
- *  1. 使用者點「開啟 Tronclass 登入頁」→ 瀏覽器跳到登入頁
- *  2. 在瀏覽器完成登入後，F12 複製 Cookie
- *  3. 貼到「Cookie」欄位 → 按「同步資料」
- *  4. 程式呼叫 TronclassService 解析姓名 + 待辦，並透過 SessionManager 更新狀態
- *
- * v0.6 變更：
- *  - 接受 SessionManager 參數，登入成功後呼叫 sessionManager.onLoginSuccess()
- *  - syncTodos 改為處理 SessionExpiredException
+ * Tronclass 登入與同步視窗。
+ * 使用者在瀏覽器登入後貼上 Cookie，本視窗會呼叫 TronclassService 解析姓名與待辦資料，
+ * 成功後再透過 SessionManager 更新全域登入狀態。
  */
 public class TronclassLoginDialog extends JDialog {
 
@@ -66,7 +58,7 @@ public class TronclassLoginDialog extends JDialog {
         AppUIManager.keepWindowInScreen(this);
     }
 
-    // ── UI 建構 ──────────────────────────────────────────────────────────────
+    // UI 建構
 
     private JPanel buildRoot() {
         JPanel root = new JPanel(new BorderLayout()) {
@@ -95,7 +87,7 @@ public class TronclassLoginDialog extends JDialog {
         root.setOpaque(false);
         root.setBorder(new EmptyBorder(0, 0, 9, 9));
 
-        // ── Header ──
+        // Header
         JPanel header = new JPanel(new BorderLayout());
         header.setOpaque(false);
         header.setBorder(new EmptyBorder(12, 16, 12, 10));
@@ -110,7 +102,7 @@ public class TronclassLoginDialog extends JDialog {
         header.add(closeBtn, BorderLayout.EAST);
         AppUIManager.enableWindowDrag(this, header);
 
-        // ── 主內容 ──
+        // 主內容
         JPanel content = new JPanel(new GridBagLayout());
         content.setOpaque(false);
         content.setBorder(new EmptyBorder(16, 18, 10, 18));
@@ -167,7 +159,7 @@ public class TronclassLoginDialog extends JDialog {
         statusLabel.setForeground(AppColors.TEXT_TERTIARY);
         content.add(statusLabel, gc);
 
-        // ── 底部按鈕 ──
+        // 底部按鈕
         JPanel btnRow = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 10));
         btnRow.setBackground(new Color(0xFAF9F7));
         btnRow.setOpaque(true);
@@ -188,7 +180,7 @@ public class TronclassLoginDialog extends JDialog {
         return root;
     }
 
-    // ── 事件處理 ─────────────────────────────────────────────────────────────
+    // 事件處理
 
     private void openBrowser() {
         try {
@@ -254,7 +246,7 @@ public class TronclassLoginDialog extends JDialog {
         statusLabel.setForeground(color);
     }
 
-    // ── UI 工廠 ───────────────────────────────────────────────────────────────
+    // UI 工廠
 
     private JLabel stepLabel(String text) {
         JLabel l = new JLabel(text);

@@ -12,6 +12,10 @@ import javax.swing.border.*;
 import model.Task;
 import service.CategoryManager;
 
+/**
+ * 任務行事曆面板。
+ * 以週為單位顯示 Task，支援分類篩選、新增/編輯任務與點選提醒目標後定位。
+ */
 public class CalendarPanel extends JPanel {
 
     private static final String[] WEEK_DAY_NAMES = {"日","一","二","三","四","五","六"};
@@ -93,7 +97,7 @@ public class CalendarPanel extends JPanel {
         super.removeNotify();
     }
 
-    // ── Tag 篩選列 ───────────────────────────────────────────────────────────
+    // Tag 篩選列
     private CategoryTagBar buildTagBar() {
         return new CategoryTagBar(categoryManager, filter -> {
             currentFilter = filter;
@@ -101,7 +105,7 @@ public class CalendarPanel extends JPanel {
         });
     }
 
-    // ── 頂部週切換列 ──────────────────────────────────────────────────────────
+    // 頂部週切換列
     private JPanel buildTopNav() {
         JPanel nav = new JPanel(new BorderLayout());
         nav.setBackground(AppColors.BG_SECONDARY);
@@ -158,7 +162,7 @@ public class CalendarPanel extends JPanel {
         return b;
     }
 
-    // ── 底部提示列 ────────────────────────────────────────────────────────────
+    // 底部提示列
     private JPanel buildHintBar() {
         JPanel bar = new JPanel(new FlowLayout(FlowLayout.RIGHT, 16, 6));
         bar.setBackground(AppColors.BG_SECONDARY);
@@ -170,7 +174,7 @@ public class CalendarPanel extends JPanel {
         return bar;
     }
 
-    // ── 七天格子 ──────────────────────────────────────────────────────────────
+    // 七天格子
     private JPanel buildGrid() {
         JPanel grid = new JPanel(new GridLayout(1, 7, 1, 0));
         grid.setBackground(AppColors.BORDER_DEFAULT);
@@ -228,7 +232,7 @@ public class CalendarPanel extends JPanel {
         return grid;
     }
 
-    // ── 建立單一任務卡片 ──────────────────────────────────────────────────────
+    // 建立單一任務卡片
     private JPanel buildTaskCard(Task task, int dayIdx) {
         JPanel card = new JPanel(new BorderLayout(4, 0));
         card.setOpaque(true);
@@ -346,7 +350,7 @@ public class CalendarPanel extends JPanel {
         return card;
     }
 
-    // ── Popover 顯示 / 關閉 ──────────────────────────────────────────────────
+    // Popover 顯示 / 關閉
     private void showPopover(Task task, JPanel sourceCard, int dayIdx) {
         closePopover();
 
@@ -417,7 +421,7 @@ public class CalendarPanel extends JPanel {
         currentPopover = null;
     }
 
-    // ── 任務 Popover 元件 ────────────────────────────────────────────────────
+    // 任務 Popover 元件
     private static class TaskPopover extends JPanel {
         TaskPopover(Task task, Runnable onEdit, Runnable onDelete, Runnable onClose) {
             setLayout(new BorderLayout(0, 0));
@@ -428,7 +432,7 @@ public class CalendarPanel extends JPanel {
             ));
             setOpaque(true);
 
-            // ── Header：title 換行自適應，closeBtn 固定右上角 ──
+            // Header：title 換行自適應，closeBtn 固定右上角
             JPanel header = new JPanel(new BorderLayout(0, 0));
             header.setBackground(task.isImportant() ? AppColors.DANGER_LIGHT : AppColors.ACCENT_LIGHT);
             header.setBorder(new EmptyBorder(10, 14, 10, 10));
@@ -619,7 +623,7 @@ public class CalendarPanel extends JPanel {
         }
     }
 
-    // ── 新增 / 編輯 Dialog ────────────────────────────────────────────────────
+    // 新增 / 編輯 Dialog
     private void openTaskDialog(Task editTask, LocalDate defaultDate) {
         boolean isEdit = (editTask != null);
         Window owner = SwingUtilities.getWindowAncestor(this);
@@ -701,7 +705,7 @@ public class CalendarPanel extends JPanel {
         descScroll.setMinimumSize(new Dimension(0, 86));
         AppUIManager.applySlimScrollBar(descScroll);
 
-        // ── 分類下拉 ──
+        // 分類下拉
         java.util.List<String> catOptions = new java.util.ArrayList<>();
         catOptions.add("（未分類）");
         catOptions.addAll(categoryManager.getCategories());
@@ -995,7 +999,7 @@ public class CalendarPanel extends JPanel {
         return b;
     }
 
-    // ── 更新顯示（套用篩選） ──────────────────────────────────────────────────
+    // 更新顯示（套用篩選）
     public void updateCalendar() {
         if (clearOverdueReminders()) {
             saveCallback.run();

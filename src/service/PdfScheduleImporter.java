@@ -18,6 +18,10 @@ import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.text.PDFTextStripper;
 import org.apache.pdfbox.text.TextPosition;
 
+/**
+ * 將 PDF 課表匯入為 Schedule。
+ * 使用 PDFBox 取得每段文字的位置，先判斷星期欄與節次列，再依座標把課程文字分配到格子。
+ */
 public class PdfScheduleImporter {
     private static final String[] DAY_NAMES = {"一", "二", "三", "四", "五", "六", "日"};
     private static final Pattern TIME_PATTERN = Pattern.compile("\\d{1,2}:\\d{2}~\\d{1,2}:\\d{2}");
@@ -49,6 +53,7 @@ public class PdfScheduleImporter {
         Map<CellKey, List<Token>> cellTokens = collectCellTokens(tokens, dayCenters, periodMarks);
         Map<CourseKey, List<Slot>> groupedSlots = new LinkedHashMap<>();
 
+        // 先依格子整理課程，再用 CourseKey 合併同一門課的多個時段。
         List<Map.Entry<CellKey, List<Token>>> orderedCells = new ArrayList<>(cellTokens.entrySet());
         orderedCells.sort(Comparator
                 .comparingInt((Map.Entry<CellKey, List<Token>> entry) -> entry.getKey().day)

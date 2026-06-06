@@ -29,6 +29,10 @@ import javax.swing.border.EmptyBorder;
 import javax.swing.border.LineBorder;
 import model.Reminder;
 
+/**
+ * 提醒編輯器。
+ * 提供固定時間提醒與截止前提醒兩種輸入方式，並限制每個項目最多 10 筆提醒。
+ */
 public class ReminderEditorPanel extends JPanel {
     private static final int MAX_REMINDERS = 10;
     private static final DateTimeFormatter DATE_BTN_FMT = DateTimeFormatter.ofPattern("yyyy/MM/dd");

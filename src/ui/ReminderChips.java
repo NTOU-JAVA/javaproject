@@ -19,6 +19,10 @@ import javax.swing.JPanel;
 import javax.swing.border.EmptyBorder;
 import model.Reminder;
 
+/**
+ * 將尚未到期的提醒轉成清單中的小標籤。
+ * TodoPanel 與 CalendarPanel 可用它快速顯示最近幾筆提醒。
+ */
 final class ReminderChips {
     private static final DateTimeFormatter ABS_FMT =
             DateTimeFormatter.ofPattern("MM/dd HH:mm");

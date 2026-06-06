@@ -13,6 +13,10 @@ import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
 
+/**
+ * 擷取海大資工系網站近期公告。
+ * 以 Jsoup 讀取公告列表，只保留近一個月內的資料並轉成 NewsItem。
+ */
 public class NtouCseScraper {
 
     static final String BASE_URL         = "https://cse.ntou.edu.tw";

@@ -25,6 +25,10 @@ import javax.swing.JWindow;
 import javax.swing.SwingUtilities;
 import javax.swing.border.EmptyBorder;
 
+/**
+ * 管理系統匣圖示、右鍵選單與桌面通知。
+ * 主視窗關閉時可隱藏到系統匣，提醒通知被點擊後會回到對應任務或代辦。
+ */
 public class TrayManager {
     private final MainFrame mainFrame;
     private final Runnable exitCallback;

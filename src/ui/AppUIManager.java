@@ -11,10 +11,8 @@ import javax.swing.border.*;
 import javax.swing.plaf.basic.BasicScrollBarUI;
 
 /**
- * AppUIManager：共用 UI 工具
- *  - slimScrollBar()   細線 ScrollBar（Google/Notion 風格）
- *  - showDatePicker()  月曆彈出選日期
- *  - showTimePicker()  時鐘轉盤選時間
+ * 共用 UI 工具。
+ * 集中管理圓角視窗、細線捲軸、日期選擇器與時間選擇器，避免各面板重複實作。
  */
 public class AppUIManager {
 
@@ -140,9 +138,7 @@ public class AppUIManager {
         dialog.setVisible(true);
     }
 
-    // ══════════════════════════════════════════════════════════
     // 1.  細線 ScrollBar
-    // ══════════════════════════════════════════════════════════
 
     /** 套用細線 scrollbar 至 JScrollPane（null-safe，避免 HORIZONTAL_SCROLLBAR_NEVER 時的 NPE） */
     public static void applySlimScrollBar(JScrollPane sp) {
@@ -216,9 +212,7 @@ public class AppUIManager {
         }
     }
 
-    // ══════════════════════════════════════════════════════════
     // 2.  月曆日期 Picker
-    // ══════════════════════════════════════════════════════════
 
     public interface DatePickerCallback {
         void onDateSelected(LocalDate date);
@@ -405,9 +399,7 @@ public class AppUIManager {
         }
     }
 
-    // ══════════════════════════════════════════════════════════
     // 3.  時鐘轉盤 Time Picker
-    // ══════════════════════════════════════════════════════════
 
     public interface TimePickerCallback {
         void onTimeSelected(int hour, int minute);
@@ -491,7 +483,7 @@ public class AppUIManager {
             refreshDisplay();
         }
 
-        // ── 頂部：時間顯示 + AM/PM + 模式提示 ───────────────────────────
+        // 頂部：時間顯示 + AM/PM + 模式提示
         private JPanel buildTopArea() {
             // 時:分 大字顯示，點小時或分鐘切換模式
             hourLabel.setFont(AppFonts.TITLE_LARGE);

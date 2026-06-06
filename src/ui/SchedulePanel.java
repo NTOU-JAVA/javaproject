@@ -15,17 +15,9 @@ import model.Schedule;
 import service.PdfScheduleImporter;
 
 /**
- * SchedulePanel：課表功能主面板。
- * 更新：
- *  - 移除冗餘 gridTitleLabel
- *  - 新增 professor 到課程編輯 Dialog
- *  - 課程卡顯示：課程名稱 → 開課系所 → 開課年班 → 教室
- *  - 懸浮視窗顯示所有欄位，[] 內文字改為與內容相同色
- *  - 課程顏色選擇功能（備註上方）
- *  - 星期/節次改為多時段區塊設計
- *  - 統一自訂下拉選單樣式
- *  - RWD 響應式修復
- *  - 重新命名課表 Dialog 改為原名稱（唯讀）＋新名稱格式
+ * 課表功能主面板。
+ * 管理多份 Schedule、課程 CRUD、課表格線顯示、課程詳細 Popover 與 PDF 匯入。
+ * 課程可用 scheduleString 保存多個上課時段，再在週課表中拆成對應格子顯示。
  */
 public class SchedulePanel extends JPanel {
 
@@ -117,9 +109,7 @@ public class SchedulePanel extends JPanel {
         super.removeNotify();
     }
 
-    // ══════════════════════════════════════════════════════════════════════════
     // 頂部列
-    // ══════════════════════════════════════════════════════════════════════════
     private JPanel buildTopNav() {
         JPanel nav = new JPanel(new BorderLayout());
         nav.setBackground(AppColors.BG_SECONDARY);
@@ -239,9 +229,7 @@ public class SchedulePanel extends JPanel {
         return nav;
     }
 
-    // ══════════════════════════════════════════════════════════════════════════
     // 自訂下拉選單樣式
-    // ══════════════════════════════════════════════════════════════════════════
     @SuppressWarnings("unchecked")
     private <T> JComboBox<T> createStyledComboBox() {
         JComboBox<T> combo = new JComboBox<T>() {
@@ -504,9 +492,7 @@ public class SchedulePanel extends JPanel {
         }
     }
 
-    // ══════════════════════════════════════════════════════════════════════════
     // 課表格子區
-    // ══════════════════════════════════════════════════════════════════════════
     private JScrollPane gridScrollPane;
 
     private JPanel buildGridPane() {
@@ -559,9 +545,7 @@ public class SchedulePanel extends JPanel {
         return wrapper;
     }
 
-    // ══════════════════════════════════════════════════════════════════════════
     // 更新週課表格子
-    // ══════════════════════════════════════════════════════════════════════════
     public void refreshGrid() {
         closePopover();
         gridPanel.removeAll();
@@ -691,9 +675,7 @@ public class SchedulePanel extends JPanel {
         return cell;
     }
 
-    // ══════════════════════════════════════════════════════════════════════════
     // 課程卡
-    // ══════════════════════════════════════════════════════════════════════════
     private JPanel buildCourseCard(Course c) {
         int[] ci = getCourseColorIndex(c);
         Color bgColor  = PRESET_COLORS[ci[0]][0];
@@ -786,9 +768,7 @@ public class SchedulePanel extends JPanel {
         return new int[]{ idx };
     }
 
-    // ══════════════════════════════════════════════════════════════════════════
     // Popover 管理
-    // ══════════════════════════════════════════════════════════════════════════
     private void closePopover() {
         if (currentPopover == null) return;
         JRootPane root = SwingUtilities.getRootPane(this);
@@ -837,9 +817,7 @@ public class SchedulePanel extends JPanel {
         Toolkit.getDefaultToolkit().addAWTEventListener(closer, AWTEvent.MOUSE_EVENT_MASK);
     }
 
-    // ══════════════════════════════════════════════════════════════════════════
     // 課程 Popover
-    // ══════════════════════════════════════════════════════════════════════════
     private JPanel buildCoursePopover(Course course) {
         int[] ci = getCourseColorIndex(course);
         Color headerBg  = PRESET_COLORS[ci[0]][0];
@@ -1066,9 +1044,7 @@ public class SchedulePanel extends JPanel {
         return b;
     }
 
-    // ══════════════════════════════════════════════════════════════════════════
     // 懸浮圓角 Dialog 基礎工廠
-    // ══════════════════════════════════════════════════════════════════════════
     private JPanel buildFloatingRoot(JDialog dlg, String title, Color accentColor) {
         dlg.setUndecorated(true);
         dlg.setLayout(new BorderLayout());
@@ -1281,9 +1257,7 @@ public class SchedulePanel extends JPanel {
         );
     }
 
-    // ══════════════════════════════════════════════════════════════════════════
     // 新增 / 重新命名課表 Dialog
-    // ══════════════════════════════════════════════════════════════════════════
     private void showScheduleDialog(Schedule editSchedule) {
         boolean isEdit = (editSchedule != null);
         Window owner = SwingUtilities.getWindowAncestor(this);
@@ -1302,7 +1276,7 @@ public class SchedulePanel extends JPanel {
         int rowIdx = 0;
 
         if (isEdit) {
-            // ── 重新命名：原名稱（唯讀）＋ 新名稱 ──
+            // 重新命名：原名稱（唯讀）＋ 新名稱
             // 原名稱
             gc.gridy = rowIdx++; gc.insets = new Insets(0, 0, 4, 0);
             content.add(dlgFieldLabel("原名稱"), gc);
@@ -1352,7 +1326,7 @@ public class SchedulePanel extends JPanel {
             root.add(buildDlgBtnRow(dlg, "儲存", AppColors.ACCENT, onOk), BorderLayout.SOUTH);
 
         } else {
-            // ── 新增：只有課表名稱欄位 ──
+            // 新增：只有課表名稱欄位
             JTextField nameField = new JTextField();
             nameField.setFont(AppFonts.BODY_MEDIUM);
             nameField.setBorder(BorderFactory.createCompoundBorder(
@@ -1396,9 +1370,7 @@ public class SchedulePanel extends JPanel {
         dlg.setVisible(true);
     }
 
-    // ══════════════════════════════════════════════════════════════════════════
     // 新增 / 編輯課程 Dialog
-    // ══════════════════════════════════════════════════════════════════════════
     private void showCourseDialog(Course editCourse) {
         boolean isEdit = (editCourse != null);
         Window owner = SwingUtilities.getWindowAncestor(this);
@@ -1430,7 +1402,7 @@ public class SchedulePanel extends JPanel {
         noteScroll.getVerticalScrollBar().setUnitIncrement(12);
         AppUIManager.applySlimScrollBar(noteScroll);
 
-        // ── 顏色選擇器 ──
+        // 顏色選擇器
         int initColorIdx = isEdit ? Math.max(0, editCourse.getColorIndex()) : 0;
         if (initColorIdx < 0 || initColorIdx >= PRESET_COLORS.length)
             initColorIdx = (isEdit ? (editCourse.getId() - 1) % PRESET_COLORS.length : 0);
@@ -1438,7 +1410,7 @@ public class SchedulePanel extends JPanel {
 
         JPanel colorPanel = buildColorPicker(selectedColorIdx);
 
-        // ── 多時段排程區塊 ──
+        // 多時段排程區塊
         List<int[]> initSlots = new ArrayList<>();
         if (isEdit) {
             String schedStr = editCourse.getScheduleString();
@@ -1538,7 +1510,7 @@ public class SchedulePanel extends JPanel {
             rebuildSlots.run();
         });
 
-        // ── 錯誤 Banner ──
+        // 錯誤 Banner
         JPanel errorBanner = new JPanel(new BorderLayout(8, 0));
         errorBanner.setOpaque(true);
         errorBanner.setBackground(AppColors.DANGER_LIGHT);
@@ -1579,7 +1551,7 @@ public class SchedulePanel extends JPanel {
         errorBanner.add(iconWrap,  BorderLayout.WEST);
         errorBanner.add(errorMsg,  BorderLayout.CENTER);
 
-        // ── Content ──
+        // Content
         JPanel content = new JPanel(new GridBagLayout());
         content.setOpaque(false);
         content.setBorder(new EmptyBorder(14, 16, 10, 16));
@@ -1709,9 +1681,7 @@ public class SchedulePanel extends JPanel {
         dlg.setVisible(true);
     }
 
-    // ══════════════════════════════════════════════════════════════════════════
     // 顏色選擇器
-    // ══════════════════════════════════════════════════════════════════════════
     private JPanel buildColorPicker(int[] selectedColorIdx) {
         JPanel picker = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 4));
         picker.setOpaque(false);
@@ -1756,9 +1726,7 @@ public class SchedulePanel extends JPanel {
         return picker;
     }
 
-    // ══════════════════════════════════════════════════════════════════════════
     // 時段列
-    // ══════════════════════════════════════════════════════════════════════════
     class SlotRow {
         JPanel panel;
         private JComboBox<String> dayBox;
@@ -1873,9 +1841,7 @@ public class SchedulePanel extends JPanel {
         } catch (Exception e) { return null; }
     }
 
-    // ══════════════════════════════════════════════════════════════════════════
     // 切換課表
-    // ══════════════════════════════════════════════════════════════════════════
     private void switchSchedule(Schedule s) {
         if (activeSchedule != null) activeSchedule.setActive(false);
         activeSchedule = s;
@@ -1887,9 +1853,7 @@ public class SchedulePanel extends JPanel {
         saveCallback.run();
     }
 
-    // ══════════════════════════════════════════════════════════════════════════
     // Grid Helpers
-    // ══════════════════════════════════════════════════════════════════════════
     private JPanel headerCell(String text) {
         JPanel p = new JPanel(new BorderLayout());
         p.setBackground(AppColors.BG_SECONDARY);
@@ -1943,9 +1907,7 @@ public class SchedulePanel extends JPanel {
         };
     }
 
-    // ══════════════════════════════════════════════════════════════════════════
     // Dialog 共用工廠
-    // ══════════════════════════════════════════════════════════════════════════
     private JLabel dlgFieldLabel(String text) {
         JLabel l = new JLabel(text);
         l.setFont(AppFonts.BODY_SMALL);
