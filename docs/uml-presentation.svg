@@ -1,0 +1,260 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1700" height="1150" viewBox="0 0 1700 1150">
+  <defs>
+    <style>
+      .title { font: 700 34px "Microsoft JhengHei", "Noto Sans TC", sans-serif; fill: #172033; }
+      .subtitle { font: 15px "Microsoft JhengHei", "Noto Sans TC", sans-serif; fill: #64748b; }
+      .section { font: 700 18px "Microsoft JhengHei", "Noto Sans TC", sans-serif; fill: #334155; }
+      .class { fill: #ffffff; stroke: #475569; stroke-width: 2; rx: 10; }
+      .head-ui { fill: #eaf4ff; stroke: #475569; stroke-width: 2; }
+      .head-service { fill: #eaf8ee; stroke: #475569; stroke-width: 2; }
+      .head-persist { fill: #fff4df; stroke: #475569; stroke-width: 2; }
+      .head-model { fill: #f4efff; stroke: #475569; stroke-width: 2; }
+      .name { font: 700 18px "Microsoft JhengHei", "Noto Sans TC", sans-serif; fill: #172033; }
+      .desc { font: 13px "Microsoft JhengHei", "Noto Sans TC", sans-serif; fill: #475569; }
+      .member { font: 13px Consolas, "Microsoft JhengHei", sans-serif; fill: #334155; }
+      .rel { stroke: #475569; stroke-width: 2.1; fill: none; marker-end: url(#arrow); }
+      .use { stroke: #94a3b8; stroke-width: 2; fill: none; stroke-dasharray: 7 6; marker-end: url(#arrowLight); }
+      .label { font: 13px "Microsoft JhengHei", "Noto Sans TC", sans-serif; fill: #64748b; }
+    </style>
+    <marker id="arrow" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+      <path d="M2,2 L10,6 L2,10 Z" fill="#475569"/>
+    </marker>
+    <marker id="arrowLight" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+      <path d="M2,2 L10,6 L2,10 Z" fill="#94a3b8"/>
+    </marker>
+  </defs>
+
+  <rect width="1700" height="1150" fill="#ffffff"/>
+  <text x="70" y="70" class="title">學生行程與任務管理系統 - UML 類別圖（簡化版）</text>
+  <text x="70" y="100" class="subtitle">呈現主要類別、職責與關聯；完整細節另以 Mermaid 完整 UML 提供。</text>
+
+  <text x="70" y="148" class="section">UI Layer：畫面與互動</text>
+  <text x="440" y="148" class="section">Service Layer：功能邏輯</text>
+  <text x="825" y="148" class="section">Persistence Layer：資料儲存</text>
+  <text x="1190" y="148" class="section">Model Layer：資料物件</text>
+
+  <!-- UI -->
+  <g transform="translate(60,175)">
+    <rect width="290" height="138" class="class"/>
+    <rect width="290" height="42" class="head-ui"/>
+    <text x="18" y="28" class="name">MainFrame</text>
+    <text x="16" y="64" class="desc">主視窗，整合 Topbar / Sidebar</text>
+    <text x="16" y="86" class="member">- CardLayout contentArea</text>
+    <text x="16" y="108" class="member">- SessionManager</text>
+    <text x="16" y="130" class="member">+ openReminderTarget()</text>
+  </g>
+
+  <g transform="translate(60,350)">
+    <rect width="290" height="118" class="class"/>
+    <rect width="290" height="42" class="head-ui"/>
+    <text x="18" y="28" class="name">CalendarPanel</text>
+    <text x="16" y="64" class="desc">週行事曆，管理 Task 顯示與編輯</text>
+    <text x="16" y="86" class="member">- List&lt;Task&gt; tasks</text>
+    <text x="16" y="108" class="member">+ updateCalendar()</text>
+  </g>
+
+  <g transform="translate(60,500)">
+    <rect width="290" height="118" class="class"/>
+    <rect width="290" height="42" class="head-ui"/>
+    <text x="18" y="28" class="name">TodoPanel</text>
+    <text x="16" y="64" class="desc">代辦清單，支援完成、分類、提醒</text>
+    <text x="16" y="86" class="member">- List&lt;TodoItem&gt; todos</text>
+    <text x="16" y="108" class="member">+ refreshList()</text>
+  </g>
+
+  <g transform="translate(60,650)">
+    <rect width="290" height="118" class="class"/>
+    <rect width="290" height="42" class="head-ui"/>
+    <text x="18" y="28" class="name">SchedulePanel</text>
+    <text x="16" y="64" class="desc">課表畫面，管理課程與 PDF 匯入</text>
+    <text x="16" y="86" class="member">- List&lt;Schedule&gt; schedules</text>
+    <text x="16" y="108" class="member">+ switchSchedule()</text>
+  </g>
+
+  <g transform="translate(60,800)">
+    <rect width="290" height="118" class="class"/>
+    <rect width="290" height="42" class="head-ui"/>
+    <text x="18" y="28" class="name">SchoolNewsPanel</text>
+    <text x="16" y="64" class="desc">公告列表，支援搜尋、分類、收藏</text>
+    <text x="16" y="86" class="member">- SchoolNewsCrawler</text>
+    <text x="16" y="108" class="member">- starredUrls</text>
+  </g>
+
+  <g transform="translate(60,950)">
+    <rect width="290" height="118" class="class"/>
+    <rect width="290" height="42" class="head-ui"/>
+    <text x="18" y="28" class="name">TrayManager</text>
+    <text x="16" y="64" class="desc">系統匣與右下角提醒通知</text>
+    <text x="16" y="86" class="member">+ displayMessage()</text>
+    <text x="16" y="108" class="member">+ install() / remove()</text>
+  </g>
+
+  <!-- Service -->
+  <g transform="translate(420,190)">
+    <rect width="315" height="126" class="class"/>
+    <rect width="315" height="42" class="head-service"/>
+    <text x="18" y="28" class="name">ReminderService</text>
+    <text x="16" y="64" class="desc">提醒核心，每 30 秒掃描 Task / Todo</text>
+    <text x="16" y="86" class="member">- shownReminderKeys</text>
+    <text x="16" y="108" class="member">+ start() / togglePaused()</text>
+  </g>
+
+  <g transform="translate(420,350)">
+    <rect width="315" height="126" class="class"/>
+    <rect width="315" height="42" class="head-service"/>
+    <text x="18" y="28" class="name">TronclassService</text>
+    <text x="16" y="64" class="desc">使用 Cookie 同步 Tronclass 待辦</text>
+    <text x="16" y="86" class="member">+ validateCookie()</text>
+    <text x="16" y="108" class="member">+ syncTodos()</text>
+  </g>
+
+  <g transform="translate(420,510)">
+    <rect width="315" height="126" class="class"/>
+    <rect width="315" height="42" class="head-service"/>
+    <text x="18" y="28" class="name">PdfScheduleImporter</text>
+    <text x="16" y="64" class="desc">PDFBox 讀取文字座標並轉成課表</text>
+    <text x="16" y="86" class="member">+ importSchedule()</text>
+    <text x="16" y="108" class="member">- collectCellTokens()</text>
+  </g>
+
+  <g transform="translate(420,670)">
+    <rect width="315" height="126" class="class"/>
+    <rect width="315" height="42" class="head-service"/>
+    <text x="18" y="28" class="name">SchoolNewsCrawler</text>
+    <text x="16" y="64" class="desc">背景抓取學校 / 系所公告</text>
+    <text x="16" y="86" class="member">+ loadAsync()</text>
+    <text x="16" y="108" class="member">+ getCachedNews()</text>
+  </g>
+
+  <g transform="translate(420,830)">
+    <rect width="315" height="126" class="class"/>
+    <rect width="315" height="42" class="head-service"/>
+    <text x="18" y="28" class="name">CategoryManager</text>
+    <text x="16" y="64" class="desc">分類新增、刪除、重新命名與通知 UI</text>
+    <text x="16" y="86" class="member">+ addCategory()</text>
+    <text x="16" y="108" class="member">+ addListener()</text>
+  </g>
+
+  <g transform="translate(420,990)">
+    <rect width="315" height="100" class="class"/>
+    <rect width="315" height="42" class="head-service"/>
+    <text x="18" y="28" class="name">SessionManager</text>
+    <text x="16" y="64" class="desc">管理 Tronclass 登入 / 過期 / 登出狀態</text>
+    <text x="16" y="86" class="member">+ onLoginSuccess() / logout()</text>
+  </g>
+
+  <!-- Persistence -->
+  <g transform="translate(790,245)">
+    <rect width="310" height="138" class="class"/>
+    <rect width="310" height="42" class="head-persist"/>
+    <text x="18" y="28" class="name">XmlDataStore</text>
+    <text x="16" y="64" class="desc">主要資料 XML 存取</text>
+    <text x="16" y="86" class="member">+ loadTasks / saveTasks</text>
+    <text x="16" y="108" class="member">+ loadTodos / saveTodos</text>
+    <text x="16" y="130" class="member">+ loadSchedules / saveSchedules</text>
+  </g>
+
+  <g transform="translate(790,450)">
+    <rect width="310" height="118" class="class"/>
+    <rect width="310" height="42" class="head-persist"/>
+    <text x="18" y="28" class="name">TronclassSessionStore</text>
+    <text x="16" y="64" class="desc">保存 Cookie 與使用者名稱</text>
+    <text x="16" y="86" class="member">+ load() : SavedSession</text>
+    <text x="16" y="108" class="member">+ save() / clear()</text>
+  </g>
+
+  <!-- Model -->
+  <g transform="translate(1180,170)">
+    <rect width="290" height="118" class="class"/>
+    <rect width="290" height="42" class="head-model"/>
+    <text x="18" y="28" class="name">Task</text>
+    <text x="16" y="64" class="desc">行事曆任務資料</text>
+    <text x="16" y="86" class="member">- title, date, time</text>
+    <text x="16" y="108" class="member">- List&lt;Reminder&gt;</text>
+  </g>
+
+  <g transform="translate(1180,320)">
+    <rect width="290" height="118" class="class"/>
+    <rect width="290" height="42" class="head-model"/>
+    <text x="18" y="28" class="name">TodoItem</text>
+    <text x="16" y="64" class="desc">代辦事項資料，可保存 Tronclass 來源</text>
+    <text x="16" y="86" class="member">- deadlineTime, sourceUrl</text>
+    <text x="16" y="108" class="member">- List&lt;Reminder&gt;</text>
+  </g>
+
+  <g transform="translate(1180,470)">
+    <rect width="290" height="118" class="class"/>
+    <rect width="290" height="42" class="head-model"/>
+    <text x="18" y="28" class="name">Reminder</text>
+    <text x="16" y="64" class="desc">固定時間或截止前提醒</text>
+    <text x="16" y="86" class="member">- Type type</text>
+    <text x="16" y="108" class="member">+ resolve(deadline)</text>
+  </g>
+
+  <g transform="translate(1180,640)">
+    <rect width="290" height="118" class="class"/>
+    <rect width="290" height="42" class="head-model"/>
+    <text x="18" y="28" class="name">Schedule</text>
+    <text x="16" y="64" class="desc">一份課表，可包含多門課程</text>
+    <text x="16" y="86" class="member">- name, active</text>
+    <text x="16" y="108" class="member">- List&lt;Course&gt;</text>
+  </g>
+
+  <g transform="translate(1180,790)">
+    <rect width="290" height="118" class="class"/>
+    <rect width="290" height="42" class="head-model"/>
+    <text x="18" y="28" class="name">Course</text>
+    <text x="16" y="64" class="desc">課程資料與上課時段</text>
+    <text x="16" y="86" class="member">- name, code, location</text>
+    <text x="16" y="108" class="member">- scheduleString</text>
+  </g>
+
+  <g transform="translate(1180,940)">
+    <rect width="290" height="100" class="class"/>
+    <rect width="290" height="42" class="head-model"/>
+    <text x="18" y="28" class="name">NewsItem</text>
+    <text x="16" y="64" class="desc">公告資料</text>
+    <text x="16" y="86" class="member">- title, url, fetchedTime</text>
+  </g>
+
+  <!-- Relationships -->
+  <path d="M350 245 L420 245" class="rel"/>
+  <text x="356" y="235" class="label">建立 / 協調</text>
+
+  <path d="M350 410 L1180 230" class="rel"/>
+  <path d="M350 560 L1180 380" class="rel"/>
+  <path d="M350 710 L1180 700" class="rel"/>
+  <path d="M350 860 L1180 990" class="rel"/>
+
+  <path d="M350 1010 L420 255" class="use"/>
+  <text x="355" y="1000" class="label">通知顯示</text>
+
+  <path d="M735 245 L1180 230" class="use"/>
+  <path d="M735 270 L1180 380" class="use"/>
+  <path d="M735 535 L1180 700" class="use"/>
+  <path d="M735 735 L1180 990" class="use"/>
+
+  <path d="M735 410 L1180 380" class="use"/>
+  <text x="785" y="405" class="label">同步待辦</text>
+
+  <path d="M735 880 L350 410" class="use"/>
+  <path d="M735 880 L350 560" class="use"/>
+  <text x="480" y="815" class="label">分類變更通知 UI</text>
+
+  <path d="M735 1035 L790 510" class="use"/>
+  <text x="742" y="1025" class="label">保存登入狀態</text>
+
+  <path d="M1100 300 L1180 230" class="rel"/>
+  <path d="M1100 325 L1180 380" class="rel"/>
+  <path d="M1100 350 L1180 700" class="rel"/>
+  <text x="1110" y="285" class="label">XML 轉換</text>
+
+  <path d="M1470 230 L1515 230 L1515 470 L1470 530" class="rel"/>
+  <path d="M1470 380 L1515 380 L1515 470 L1470 530" class="rel"/>
+  <text x="1525" y="455" class="label">包含提醒</text>
+
+  <path d="M1470 700 L1515 700 L1515 850 L1470 850" class="rel"/>
+  <text x="1525" y="785" class="label">包含課程</text>
+
+  <text x="70" y="1115" class="subtitle">實線：主要資料/組合關係；虛線：使用或呼叫關係。完整欄位、方法與內部類別請參考 docs/full-uml.mmd。</text>
+</svg>
