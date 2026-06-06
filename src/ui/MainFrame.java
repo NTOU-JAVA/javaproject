@@ -629,13 +629,6 @@ public class MainFrame extends JFrame {
         sb.add(sep);
         sb.add(Box.createRigidArea(new Dimension(0, 8)));
 
-        JLabel ver = new JLabel("  v0.6  早期預覽版");
-        ver.setFont(AppFonts.CAPTION);
-        ver.setForeground(AppColors.TEXT_TERTIARY);
-        ver.setAlignmentX(Component.LEFT_ALIGNMENT);
-        sb.add(ver);
-        sb.add(Box.createRigidArea(new Dimension(0, 10)));
-
         activeNav = calNav;
         calNav.setActive(true);
         return sb;
