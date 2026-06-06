@@ -227,12 +227,25 @@ public class TronclassLoginDialog extends JDialog {
                     }) {{ setRepeats(false); start(); }};
                 });
 
-            } catch (TronclassService.SessionExpiredException e) {
+            } 
+            // 關鍵 1：小的、具體的 Exception 必須寫在前面！
+            catch (TronclassService.SessionExpiredException e) {
                 SwingUtilities.invokeLater(() -> {
                     syncBtn.setEnabled(true);
                     setStatus("Session 已失效，請重新登入並複製 Cookie。", AppColors.DANGER);
+                    
+                    // 【新增】：通知全域狀態失效，觸發所有 UI 監聽器更新畫面
+                    if (sessionManager != null) {
+                        sessionManager.notifySessionExpired();
+                    }
+                    
+                    // 【新增】：順手把本地壞掉的 cookie properties 檔案清空
+                    persistence.TronclassSessionStore store = new persistence.TronclassSessionStore();
+                    store.clear();
                 });
-            } catch (Exception ex) {
+            } 
+            // 關鍵 2：廣義的 Exception 必須寫在最後面！
+            catch (Exception ex) {
                 SwingUtilities.invokeLater(() -> {
                     syncBtn.setEnabled(true);
                     setStatus("同步失敗：" + ex.getMessage(), AppColors.DANGER);

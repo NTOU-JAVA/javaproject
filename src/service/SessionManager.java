@@ -3,16 +3,15 @@ package service;
 import java.util.ArrayList;
 import java.util.List;
 import javax.swing.*;
-import persistence.TronclassSessionStore;
 
 /**
- * SessionManager：集中管理 Tronclass 登入狀態。
+ * SessionManager: centralized Tronclass login state management.
  *
- * 職責：
- *  - 持有目前的 cookie 與使用者名稱
- *  - 提供 logout()（主動登出）
- *  - 提供 notifySessionExpired()（被動失效，如 API 回傳 SESSION_EXPIRED）
- *  - 讓 UI 元件透過 listener 監聽狀態變化
+ * Responsibilities:
+ *  - Keep the current cookie and user name
+ *  - Provide logout() for active logout
+ *  - Provide notifySessionExpired() for passive expiration from API responses
+ *  - Let UI components observe state changes through listeners
  */
 public class SessionManager {
 
@@ -27,61 +26,35 @@ public class SessionManager {
     private String cookie   = null;
 
     private final List<SessionListener> listeners = new ArrayList<>();
-    private final TronclassSessionStore sessionStore = new TronclassSessionStore();
-
-    // 查詢
 
     public State  getState()    { return state; }
     public String getUserName() { return userName; }
     public String getCookie()   { return cookie; }
     public boolean isLoggedIn() { return state == State.LOGGED_IN; }
 
-    // 登入成功時呼叫（由 TronclassLoginDialog 回調）
-
     public void onLoginSuccess(String name, String cookie) {
         this.userName = name;
         this.cookie   = cookie;
-        sessionStore.save(name, cookie);
         setState(State.LOGGED_IN);
     }
-
-    // 程式啟動時嘗試恢復上次登入
-
-    public boolean restoreSavedSession() {
-        TronclassSessionStore.SavedSession saved = sessionStore.load();
-        if (saved == null) return false;
-        this.userName = saved.getUserName();
-        this.cookie = saved.getCookie();
-        setState(State.LOGGED_IN);
-        return true;
-    }
-
-    // 主動登出
 
     public void logout() {
         this.userName = null;
         this.cookie   = null;
-        sessionStore.clear();
         setState(State.LOGGED_OUT);
     }
 
-    // Cookie 失效（由後台執行緒偵測後，切回 EDT 呼叫）
-
     public void notifySessionExpired() {
-        if (state != State.LOGGED_IN) return; // 避免重複觸發
+        if (state != State.LOGGED_IN) return;
         this.cookie = null;
-        sessionStore.clear();
         setState(State.EXPIRED);
     }
-
-    // 觀察者
 
     public void addListener(SessionListener l)    { listeners.add(l); }
     public void removeListener(SessionListener l) { listeners.remove(l); }
 
     private void setState(State newState) {
         this.state = newState;
-        // 確保在 EDT 上通知 UI
         if (SwingUtilities.isEventDispatchThread()) {
             fireListeners();
         } else {

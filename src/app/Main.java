@@ -9,13 +9,10 @@ import model.TodoItem;
 import persistence.XmlDataStore;
 import service.CategoryManager;
 import service.ReminderService;
+import service.SessionManager; // 確保有引入
 import ui.MainFrame;
 import ui.TrayManager;
 
-/**
- * 程式進入點。
- * 負責載入 XML 資料、建立主視窗、啟動提醒服務，並集中處理關閉與系統匣流程。
- */
 public class Main {
     private final List<Task>     tasks     = new ArrayList<>();
     private final List<TodoItem> todos     = new ArrayList<>();
@@ -30,9 +27,14 @@ public class Main {
         dataStore.loadTasks(tasks);
         dataStore.loadTodos(todos);
         dataStore.loadSchedules(schedules);
+        
+        // 1. 先把主視窗實例化出來。
+        //    MainFrame 建構子內部已經自行呼叫 sessionManager.restoreSavedSession()
+        //    並在成功後立即執行 validateCookieInBackground()，不需要在這裡重複處理。
         mainFrame = new MainFrame(tasks, todos, schedules, categoryManager,
                 this::saveTasksToXML, this::saveTodosToXML, this::saveSchedulesToXML);
 
+        // 2. 啟動原本的內建服務
         reminderService = new ReminderService(tasks, todos, this::showReminderNotification,
                 this::saveAndRefreshReminders);
         trayManager = new TrayManager(mainFrame, this::exitApplication,

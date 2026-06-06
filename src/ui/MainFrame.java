@@ -116,10 +116,6 @@ public class MainFrame extends JFrame {
 
         // 監聽 Session 狀態變化
         sessionManager.addListener((state, userName) -> onSessionStateChanged(state, userName));
-        if (sessionManager.restoreSavedSession()) {
-            validateCookieInBackground();
-        }
-
         // 每 2 分鐘在背景檢查一次 Cookie，避免 UI 顯示過期登入狀態。
         cookieValidationTimer = new Timer(2 * 60 * 1000, e -> validateCookieInBackground());
         cookieValidationTimer.start();
@@ -331,7 +327,11 @@ public class MainFrame extends JFrame {
         new Thread(() -> {
             boolean valid = TronclassService.validateCookie(cookie);
             if (!valid) {
-                // notifySessionExpired 已經在 EDT 上執行 listener
+                // 1. 清除本地 properties 檔案，防止下次重開又讀到壞 Cookie
+                persistence.TronclassSessionStore store = new persistence.TronclassSessionStore();
+                store.clear();
+                
+                // 2. 被動通知失效，讓右上角 UI 自動黑掉或變更為未登入
                 sessionManager.notifySessionExpired();
             }
         }).start();
@@ -746,6 +746,10 @@ public class MainFrame extends JFrame {
         if (cookieValidationTimer != null) cookieValidationTimer.stop();
         dispose();
         System.exit(0);
+    }
+
+    public SessionManager getSessionManager() {
+        return this.sessionManager;
     }
 
     public void showWindow() { setVisible(true); }

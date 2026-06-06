@@ -58,11 +58,20 @@ public class TronclassService {
     public static boolean validateCookie(String cookie) {
         if (cookie == null || cookie.isEmpty()) return false;
         try {
-            get(BASE_URL + "/user/index", cookie);
+            String body = get(BASE_URL + "/user/index", cookie);
+            if (body == null) return false;
+            // 伺服器回 200 但 body 是 CAS 登入頁特徵，視為失效
+            if (body.length() < 500) return false;
+            if (body.contains("cas.ntou.edu.tw")
+                    || body.contains("/cas/login")
+                    || body.contains("SESSION_EXPIRED")) {
+                return false;
+            }
             return true;
         } catch (SessionExpiredException e) {
             return false;
         } catch (Exception e) {
+            // 網路異常（timeout、DNS 失敗等）：保守判定為有效，不強制登出
             return true;
         }
     }
@@ -291,8 +300,9 @@ public class TronclassService {
             }
             return null;
         }
+        
         if (code == 401 || code == 403) {
-            return null;
+            throw new SessionExpiredException();
         }
         if (code != 200) return null;
 
