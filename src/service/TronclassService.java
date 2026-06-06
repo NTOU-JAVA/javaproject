@@ -6,9 +6,13 @@ import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.regex.*;
 import model.TodoItem;
+import org.jsoup.Jsoup;          // 引入 Jsoup
+import org.jsoup.nodes.Document; // 引入 Jsoup 文件物件
+import org.jsoup.nodes.Element;  // 引入 Jsoup 元素物件
+import org.jsoup.select.Elements;// 引入 Jsoup 元素集合
 
 /**
- * Tronclass 資料同步服務。
+ * Tronclass 資料同步服務（已整合 Jsoup 優化 HTML 解析）。
  * 使用使用者提供的 Cookie 呼叫 Tronclass API，解析待辦事項後合併到本機 TodoItem 清單。
  */
 public class TronclassService {
@@ -302,6 +306,9 @@ public class TronclassService {
         return sb.toString();
     }
     
+    /**
+     * 已使用 Jsoup 優化重構的描述抓取函數
+     */
     private static String fetchTodoDescription(String courseId, String activityId, String cookie) throws Exception {
         if (courseId == null || activityId == null) return "";
         
@@ -326,7 +333,7 @@ public class TronclassService {
 
         if (json == null || json.isBlank()) return "";
 
-        String content = null;
+        String htmlContent = null;
         String[] possibleFields = {"\"description\"", "\"content\"", "\"html\"", "\"body\""};
         
         for (String field : possibleFields) {
@@ -364,92 +371,51 @@ public class TronclassService {
             if (foundEnd) {
                 String candidate = valueSb.toString();
                 if (!candidate.isBlank() && !candidate.equals("null")) {
-                    content = candidate;
+                    htmlContent = candidate;
                     break;
                 }
             }
         }
 
-        if (content == null || content.isBlank()) return "";
+        if (htmlContent == null || htmlContent.isBlank()) return "";
 
-        content = decodeUnicode(content);
-        content = content.replace("\\\"", "\"")
-                         .replace("\\t", "    ")
-                         .replace("\\\\", "\\");
+        // 基礎的 JSON 跳脫字元還原
+        htmlContent = decodeUnicode(htmlContent);
+        htmlContent = htmlContent.replace("\\\"", "\"")
+                                 .replace("\\t", "    ")
+                                 .replace("\\\\", "\\")
+                                 .replace("\\n", "\n");
 
-        content = content.replaceAll("(?i)<br\\s*/?>", "\n")
-                         .replaceAll("(?i)</p>", "\n")
-                         .replaceAll("(?i)</div>", "\n")
-                         .replaceAll("(?i)</tr>", "\n")
-                         .replaceAll("(?i)</td>", "  ")
-                         .replaceAll("(?i)</li>", "\n")
-                         .replaceAll("(?i)<li>", "• ");
-
-        StringBuilder sb = new StringBuilder();
-        boolean inTag = false;
-        StringBuilder tagContent = new StringBuilder();
-
-        for (int i = 0; i < content.length(); i++) {
-            char c = content.charAt(i);
-            if (c == '<') {
-                inTag = true;
-                tagContent.setLength(0);
-            } else if (c == '>') {
-                inTag = false;
-                String tagStr = tagContent.toString().trim();
-                
-                if (tagStr.toLowerCase().startsWith("a ")) {
-                    String url = extractHrefFromTag(tagStr);
-                    if (!url.isEmpty()) {
-                        sb.append(" (網址: ").append(url).append(") ");
-                    }
-                }
-            } else {
-                if (inTag) {
-                    tagContent.append(c);
-                } else {
-                    sb.append(c);
-                }
+        // ==================== Jsoup 改寫核心部分 ====================
+        
+        // 1. 使用 Jsoup 解析 HTML 字串
+        Document doc = Jsoup.parse(htmlContent);
+        
+        // 2. 處理超連結：找出所有的 <a> 標籤，並在它的文字後面加上 (網址: ...)
+        Elements links = doc.select("a[href]");
+        for (Element link : links) {
+            String url = link.attr("href").trim();
+            // 過濾掉無效的錨點或 javascript 連結
+            if (!url.isEmpty() && !url.startsWith("#") && !url.startsWith("javascript:")) {
+                // 在原本的超連結文字後面附註網址
+                link.after(" (網址: " + url + ") ");
             }
         }
-        content = sb.toString();
-
-        content = content.replace("&nbsp;", " ")
-                         .replace("&lt;", "<")
-                         .replace("&gt;", ">")
-                         .replace("&amp;", "&")
-                         .replace("&quot;", "\"")
-                         .replace("&#39;", "'")
-                         .replace("&apos;", "'")
-                         .replace("\\n", "\n");
-
-        content = content.replaceAll("\\n{3,}", "\n\n");
-
-        return content.trim();
-    }
-
-    private static String extractHrefFromTag(String tagStr) {
-        int hrefIdx = tagStr.toLowerCase().indexOf("href=");
-        if (hrefIdx == -1) return "";
         
-        String sub = tagStr.substring(hrefIdx + 5).trim();
-        if (sub.isEmpty()) return "";
+        // 3. 處理換行問題：Jsoup 預設的 text() 會把所有換行壓縮成空白。
+        // 我們利用 Jsoup 的 OutputSettings 設定，讓它在輸出純文字時保留基本換行（如 <br>, <p> 等）
+        doc.outputSettings(new Document.OutputSettings().prettyPrint(true));
         
-        char quote = sub.charAt(0);
-        int endIdx = -1;
+        // 4. 取得清洗乾淨的純文字，並把過多的連續換行修正
+        String cleanText = doc.text();
         
-        if (quote == '"' || quote == '\'') {
-            endIdx = sub.indexOf(quote, 1);
-            if (endIdx != -1) {
-                String url = sub.substring(1, endIdx);
-                if (!url.startsWith("#") && !url.startsWith("javascript:")) return url;
-            }
-        } else {
-            endIdx = sub.indexOf(' ');
-            String url = endIdx == -1 ? sub : sub.substring(0, endIdx);
-            if (!url.startsWith("#") && !url.startsWith("javascript:")) return url;
-        }
-        return "";
+        // 5. 補償處理：因為 Tronclass 的內容可能包含特殊的 HTML 實體或跳脫，做最後修飾
+        cleanText = cleanText.replaceAll("(?i)<br\\s*/?>", "\n") // 防禦性確保換行
+                             .replace("\\n", "\n")
+                             .replaceAll("\n{3,}", "\n\n");
+
+        return cleanText.trim();
+        // ==========================================================
     }
 
     static class TronclassTodo {
