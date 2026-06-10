@@ -8,6 +8,7 @@ import javax.swing.border.*;
 import model.Schedule;
 import model.Task;
 import model.TodoItem;
+import persistence.TronclassSessionStore;
 import service.CategoryManager;
 import service.ReminderService;
 import service.SessionManager;
@@ -42,6 +43,7 @@ public class MainFrame extends JFrame {
 
     // Session 管理
     private final SessionManager sessionManager = new SessionManager();
+    private final TronclassSessionStore sessionStore = new TronclassSessionStore();
 
     // Topbar 動態元件
     private JPanel  topbarUserArea;   // 右側動態區域（CardLayout 切換）
@@ -116,6 +118,7 @@ public class MainFrame extends JFrame {
 
         // 監聽 Session 狀態變化
         sessionManager.addListener((state, userName) -> onSessionStateChanged(state, userName));
+        restoreSavedSession();
         // 每 2 分鐘在背景檢查一次 Cookie，避免 UI 顯示過期登入狀態。
         cookieValidationTimer = new Timer(2 * 60 * 1000, e -> validateCookieInBackground());
         cookieValidationTimer.start();
@@ -253,15 +256,18 @@ public class MainFrame extends JFrame {
                 updateLoggedInPanel(userName);
                 topbarCard.show(topbarUserArea, "logged_in");
                 expiredDialogShown = false;
+                sessionStore.save(userName, sessionManager.getCookie());
                 break;
 
             case LOGGED_OUT:
                 topbarCard.show(topbarUserArea, "logged_out");
                 expiredDialogShown = false;
+                sessionStore.clear();
                 break;
 
             case EXPIRED:
                 topbarCard.show(topbarUserArea, "expired");
+                sessionStore.clear();
                 if (!expiredDialogShown) {
                     expiredDialogShown = true;
                     showSessionExpiredNotification(userName);
@@ -318,6 +324,22 @@ public class MainFrame extends JFrame {
 
     // 背景定時驗證 cookie
 
+    private void restoreSavedSession() {
+        TronclassSessionStore.SavedSession savedSession = sessionStore.load();
+        if (savedSession == null) return;
+
+        new Thread(() -> {
+            boolean valid = TronclassService.validateCookie(savedSession.getCookie());
+            SwingUtilities.invokeLater(() -> {
+                if (valid) {
+                    sessionManager.onLoginSuccess(savedSession.getUserName(), savedSession.getCookie());
+                } else {
+                    sessionStore.clear();
+                }
+            });
+        }).start();
+    }
+
     private void validateCookieInBackground() {
         if (!sessionManager.isLoggedIn()) return;
         String cookie = sessionManager.getCookie();
@@ -328,11 +350,12 @@ public class MainFrame extends JFrame {
             boolean valid = TronclassService.validateCookie(cookie);
             if (!valid) {
                 // 1. 清除本地 properties 檔案，防止下次重開又讀到壞 Cookie
-                persistence.TronclassSessionStore store = new persistence.TronclassSessionStore();
-                store.clear();
+                sessionStore.clear();
                 
                 // 2. 被動通知失效，讓右上角 UI 自動黑掉或變更為未登入
                 sessionManager.notifySessionExpired();
+            } else {
+                sessionStore.save(sessionManager.getUserName(), cookie);
             }
         }).start();
     }
