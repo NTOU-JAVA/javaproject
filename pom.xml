@@ -9,7 +9,7 @@
   <artifactId>student-planner</artifactId>
   <version>1.0.0</version>
   <packaging>jar</packaging>
-  <name>學生行程與任務管理系統</name>
+  <name>StudentPlanner</name>
 
   <properties>
     <maven.compiler.source>25</maven.compiler.source>
@@ -19,22 +19,18 @@
   </properties>
 
   <dependencies>
-    <!-- jsoup：本地 lib 資料夾 -->
+    <!-- jsoup: installed to local Maven repo via mvn install:install-file -->
     <dependency>
       <groupId>org.jsoup</groupId>
       <artifactId>jsoup</artifactId>
       <version>1.22.2</version>
-      <scope>system</scope>
-      <systemPath>${project.basedir}/lib/jsoup-1.22.2.jar</systemPath>
     </dependency>
 
-    <!-- PDFBox：本地 lib 資料夾 -->
+    <!-- PDFBox: installed to local Maven repo via mvn install:install-file -->
     <dependency>
       <groupId>org.apache.pdfbox</groupId>
       <artifactId>pdfbox-app</artifactId>
       <version>3.0.5</version>
-      <scope>system</scope>
-      <systemPath>${project.basedir}/lib/pdfbox-app-3.0.5.jar</systemPath>
     </dependency>
   </dependencies>
 
@@ -42,7 +38,7 @@
     <sourceDirectory>src</sourceDirectory>
 
     <plugins>
-      <!-- 1. 編譯 -->
+      <!-- 1. Compiler -->
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-compiler-plugin</artifactId>
@@ -54,7 +50,7 @@
         </configuration>
       </plugin>
 
-      <!-- 2. Fat JAR（含所有相依） -->
+      <!-- 2. Fat JAR with all dependencies -->
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-assembly-plugin</artifactId>
@@ -64,18 +60,12 @@
             <manifest>
               <mainClass>${main.class}</mainClass>
             </manifest>
-            <!-- 讓 manifest 也包含 system scope 的 JAR -->
-            <manifestEntries>
-              <Built-By>StudentPlanner</Built-By>
-            </manifestEntries>
           </archive>
           <descriptorRefs>
             <descriptorRef>jar-with-dependencies</descriptorRef>
           </descriptorRefs>
           <finalName>student-planner</finalName>
           <appendAssemblyId>false</appendAssemblyId>
-          <!-- 強制把 system scope 的 JAR 也包進去 -->
-          <includeSystemScope>true</includeSystemScope>
         </configuration>
         <executions>
           <execution>
